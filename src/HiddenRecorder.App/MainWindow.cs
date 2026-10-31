@@ -57,7 +57,8 @@ public sealed class MainWindow : Window
             desktop?.Dispose(); desktop = null;
         }
     }
-    private static void Bind(FrameworkElement element, DependencyProperty property, string path, bool twoWay = false) => element.SetBinding(property, new Binding { Path = new PropertyPath(path), Mode = twoWay ? BindingMode.TwoWay : BindingMode.OneWay });
+    private static void Bind(FrameworkElement element, DependencyProperty property, string path, bool twoWay = false) => element.SetBinding(property, new Binding { Path = new PropertyPath(path), Mode = twoWay ? BindingMode.TwoWay : BindingMode.OneWay,
+        UpdateSourceTrigger = twoWay ? UpdateSourceTrigger.PropertyChanged : UpdateSourceTrigger.Default });
     private static TextBlock Text(string text, double size = 14) => new() { Text = text, FontSize = size, TextWrapping = TextWrapping.Wrap };
     private static Button Button(string caption, RoutedEventHandler click) { var button = new Button { Content = caption, Padding = new Thickness(16, 10, 16, 10) }; button.Click += click; return button; }
     private void BuildContent()
@@ -94,6 +95,7 @@ public sealed class MainWindow : Window
         actions.Children.Add(Button("Выход", async (_, _) => await ExitAsync())); Grid.SetRow(actions, 5); left.Children.Add(actions);
         var settings = new StackPanel { Spacing = 14 };
         settings.Children.Add(Text("Настройки", 22));
+        var settingsMessage = Text(""); Bind(settingsMessage, TextBlock.TextProperty, nameof(vm.SettingsMessage)); settings.Children.Add(settingsMessage);
         settings.Children.Add(Text("MP4 · H.264 + AAC\nЧасти по 60 минут · резерв диска 1 ГиБ"));
         ComboBox Combo(string title, object items, string property, string? member = null)
         {
@@ -167,6 +169,13 @@ public sealed class MainWindow : Window
         if (exiting) return; exiting = true;
         viewModel?.PrepareForExit();
         layoutTimer.Stop();
+        try { if (viewModel is not null) await viewModel.SaveSettingsBeforeExitAsync(); }
+        catch (Exception ex)
+        {
+            log.Write("Settings save on exit failed", ex);
+            if (viewModel is not null) viewModel.SettingsMessage = "Не удалось сохранить настройки перед выходом: " + ex.Message;
+            exiting = false; layoutTimer.Start(); Show(); return;
+        }
         try { if (coordinator is not null) await coordinator.DisposeAsync(); }
         catch (Exception ex) { log.Write("Shutdown failed", ex); }
         Close(); Application.Current.Exit();

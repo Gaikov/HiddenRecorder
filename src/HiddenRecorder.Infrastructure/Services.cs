@@ -8,8 +8,9 @@ namespace HiddenRecorder.Infrastructure;
 public sealed class JsonSettingsStore : ISettingsStore
 {
     public static string DataDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HiddenRecorder");
-    private readonly string path = Path.Combine(DataDirectory, "settings.json");
+    private readonly string path;
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
+    public JsonSettingsStore(string? path = null) => this.path = Path.GetFullPath(path ?? Path.Combine(DataDirectory, "settings.json"));
     public async Task<RecorderSettings> LoadAsync()
     {
         if (!File.Exists(path)) return new();
@@ -19,7 +20,7 @@ public sealed class JsonSettingsStore : ISettingsStore
     }
     public async Task SaveAsync(RecorderSettings settings)
     {
-        settings.Validate(false); Directory.CreateDirectory(DataDirectory);
+        settings.Validate(false); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temporary = path + ".tmp";
         await using (var output = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
         { await JsonSerializer.SerializeAsync(output, settings, Options); await output.FlushAsync(); }

@@ -11,11 +11,12 @@ public partial class MainViewModel : ObservableObject
 {
     private readonly IDeviceCatalog devices;
     private readonly ISettingsStore store;
+    private readonly SettingsAutoSaver settingsSaver;
     private readonly RecordingCoordinator coordinator;
     private readonly DispatcherQueue dispatcher;
     private RecorderSettings loaded = new();
     private readonly Microsoft.UI.Xaml.DispatcherTimer previewRefresh = new() { Interval = TimeSpan.FromMilliseconds(600) };
-    private bool initialized, previewSuspended;
+    private bool initialized, previewSuspended, refreshingDevices, closing, settingsInputValid = true;
     public ObservableCollection<CaptureDevice> Cameras { get; } = [];
     public ObservableCollection<CaptureDevice> Microphones { get; } = [];
     public ObservableCollection<VideoMode> Modes { get; } = [];
@@ -37,6 +38,7 @@ public partial class MainViewModel : ObservableObject
     public bool CanEditSettings => CanConfigure && !Busy;
     [ObservableProperty] public partial string Status { get; set; } = "Готово к настройке";
     [ObservableProperty] public partial string Error { get; set; } = "";
+    [ObservableProperty] public partial string SettingsMessage { get; set; } = "Настройки сохраняются автоматически";
     [ObservableProperty] public partial double PeakDb { get; set; } = -90;
     [ObservableProperty] public partial double RmsDb { get; set; } = -90;
     [ObservableProperty] public partial double BufferPercent { get; set; }
@@ -47,6 +49,15 @@ public partial class MainViewModel : ObservableObject
     public MainViewModel(IDeviceCatalog devices, ISettingsStore store, RecordingCoordinator coordinator, DispatcherQueue dispatcher)
     {
         (this.devices, this.store, this.coordinator, this.dispatcher) = (devices, store, coordinator, dispatcher);
+        settingsSaver = new(store);
+        settingsSaver.Saved += () => dispatcher.TryEnqueue(() =>
+        {
+            if (settingsInputValid && !settingsSaver.HasPendingChanges) SettingsMessage = "Настройки сохранены";
+        });
+        settingsSaver.Failed += ex => dispatcher.TryEnqueue(() =>
+        {
+            if (settingsSaver.HasPendingChanges) SettingsMessage = "Настройки не сохранены: " + ex.Message;
+        });
         coordinator.Changed += value => dispatcher.TryEnqueue(() => Apply(value));
         previewRefresh.Tick += async (_, _) =>
         {
@@ -58,6 +69,10 @@ public partial class MainViewModel : ObservableObject
     protected override void OnPropertyChanged(PropertyChangedEventArgs e)
     {
         base.OnPropertyChanged(e);
+        if (initialized && !refreshingDevices && !closing && e.PropertyName is
+            nameof(SelectedCamera) or nameof(SelectedMicrophone) or nameof(SelectedMode) or nameof(OutputDirectory) or
+            nameof(PreRollSeconds) or nameof(SilenceSeconds) or nameof(ThresholdDb) or nameof(MinimumSoundMs) or
+            nameof(VideoBitrateKbps) or nameof(AudioBitrateKbps) or nameof(AudioChannels)) QueueSettingsSave();
         if (initialized && !previewSuspended && CanConfigure && e.PropertyName is
             nameof(SelectedCamera) or nameof(SelectedMicrophone) or nameof(SelectedMode) or
             nameof(PreRollSeconds) or nameof(VideoBitrateKbps) or nameof(AudioBitrateKbps) or nameof(AudioChannels))
@@ -84,7 +99,7 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand] private async Task RefreshAsync()
     {
         if (!CanConfigure || Busy) return;
-        Busy = true;
+        Busy = true; refreshingDevices = true;
         try
         {
             var catalog = await devices.EnumerateAsync(); Cameras.Clear(); Microphones.Clear();
@@ -95,7 +110,7 @@ public partial class MainViewModel : ObservableObject
             Status = Cameras.Count == 0 || Microphones.Count == 0 ? "Подключите камеру и микрофон" : "Выберите параметры и начните наблюдение";
         }
         catch (Exception ex) { Error = ex.Message; }
-        finally { Busy = false; }
+        finally { refreshingDevices = false; Busy = false; }
         if (initialized) { previewSuspended = false; await PreviewAsync(); }
     }
     private async Task PreviewAsync()
@@ -113,21 +128,43 @@ public partial class MainViewModel : ObservableObject
         catch (Exception ex) { Error = ex.Message; }
         finally { Busy = false; }
     }
-    private RecorderSettings ReadSettings()
+    private RecorderSettings ReadSettings(bool requireDevices = true)
     {
         static int Integer(double value) => double.IsFinite(value) && value == Math.Truncate(value) ? checked((int)value) : throw new ArgumentException("Введите целые значения параметров.");
-        var options = loaded with { CameraId = SelectedCamera?.Id ?? "", MicrophoneId = SelectedMicrophone?.Id ?? "", VideoMode = SelectedMode,
+        if (requireDevices && (SelectedCamera is null || SelectedMicrophone is null || SelectedMode is null))
+            throw new ArgumentException("Выберите камеру, микрофон и поддерживаемый режим видео.");
+        var options = loaded with { CameraId = SelectedCamera?.Id ?? loaded.CameraId, MicrophoneId = SelectedMicrophone?.Id ?? loaded.MicrophoneId,
+            VideoMode = SelectedCamera is null ? loaded.VideoMode : SelectedMode,
             OutputDirectory = OutputDirectory, PreRollSeconds = Integer(PreRollSeconds), SilenceSeconds = Integer(SilenceSeconds), ThresholdDb = ThresholdDb,
             MinimumSoundMs = Integer(MinimumSoundMs), VideoBitrateKbps = Integer(VideoBitrateKbps), AudioBitrateKbps = Integer(AudioBitrateKbps), AudioChannels = Integer(AudioChannels) };
-        options.Validate();
+        options.Validate(requireDevices);
         if (!new[] {64,96,128,160,192,256,320}.Contains(options.AudioBitrateKbps)) throw new ArgumentException("Битрейт AAC: 64, 96, 128, 160, 192, 256 или 320 кбит/с.");
         return options;
+    }
+    private void QueueSettingsSave()
+    {
+        try
+        {
+            var options = ReadSettings(requireDevices: false);
+            settingsInputValid = true; loaded = options;
+            settingsSaver.RequestSave(options);
+            SettingsMessage = settingsSaver.HasPendingChanges ? "Сохранение настроек…" : "Настройки сохранены";
+        }
+        catch (ArgumentException ex) { settingsInputValid = false; SettingsMessage = "Изменения не сохранены: " + ex.Message; }
+        catch (OverflowException) { settingsInputValid = false; SettingsMessage = "Изменения не сохранены: число слишком большое."; }
+    }
+    public async Task SaveSettingsBeforeExitAsync()
+    {
+        if (initialized) QueueSettingsSave();
+        closing = true;
+        try { await settingsSaver.DisposeAsync(); }
+        catch { closing = false; throw; }
     }
     [RelayCommand] public async Task StartAsync()
     {
         if (Busy || !CanConfigure) return; Busy = true; Error = "";
         previewRefresh.Stop(); previewSuspended = false;
-        try { loaded = ReadSettings(); await store.SaveAsync(loaded); await coordinator.StartAsync(loaded); }
+        try { loaded = ReadSettings(); settingsSaver.RequestSave(loaded); await settingsSaver.FlushAsync(); await coordinator.StartAsync(loaded); }
         catch (Exception ex) { Error = ex.Message; }
         finally { Busy = false; }
     }
@@ -140,6 +177,7 @@ public partial class MainViewModel : ObservableObject
     public async Task SuspendAsync()
     {
         PrepareForExit();
+        try { await settingsSaver.FlushAsync(); } catch (Exception ex) { SettingsMessage = "Настройки не сохранены: " + ex.Message; }
         try { await coordinator.StopAsync(); } catch (Exception ex) { Error = ex.Message; }
     }
     public void PrepareForExit() { previewSuspended = true; previewRefresh.Stop(); }
