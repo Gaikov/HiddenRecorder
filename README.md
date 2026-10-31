@@ -63,6 +63,8 @@ You can also change the video and audio bitrates. Higher values generally increa
 
 Completed files are stored in daily subfolders of the selected folder, for example `Videos\HiddenRecorder\2026-10-31`. The app creates each folder automatically using the computer's local date when a new file starts. A file already recording at midnight stays in its original folder; the next part or recording goes into the new day's folder. Filenames include the date and time; the current file is shown in the app window. Long recordings are split into parts of approximately one hour.
 
+If you delete a daily folder between recordings, the next recording recreates it in your selected output folder. The app does not switch to another folder when the destination is unavailable; it reports an error instead.
+
 Pre-recording may be slightly longer than the selected duration. If a sound occurs immediately after the camera starts, the file includes only the footage already buffered.
 
 Monitoring stops when free space falls below **1 GiB**. Old recordings are not deleted automatically. Move files you no longer need or choose another drive, then enable monitoring again.

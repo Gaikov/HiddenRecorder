@@ -82,7 +82,14 @@ public partial class MainViewModel : ObservableObject
     {
         if (initialized) return;
         try { loaded = await store.LoadAsync(); }
-        catch (Exception ex) { Error = "Could not load settings: " + ex.Message; }
+        catch (Exception ex)
+        {
+            Error = "Could not load settings: " + ex.Message;
+            SettingsMessage = "Saved settings were not changed. Resolve the settings-file error and restart the app.";
+            Status = "Settings could not be loaded — recording disabled";
+            CanConfigure = false;
+            return;
+        }
         OutputDirectory = loaded.OutputDirectory; PreRollSeconds = loaded.PreRollSeconds; SilenceMinutes = loaded.SilenceSeconds / 60d;
         ThresholdDb = loaded.ThresholdDb; MinimumSoundMs = loaded.MinimumSoundMs; VideoBitrateKbps = loaded.VideoBitrateKbps;
         AudioBitrateKbps = loaded.AudioBitrateKbps; AudioChannels = loaded.AudioChannels;
@@ -164,7 +171,7 @@ public partial class MainViewModel : ObservableObject
     }
     [RelayCommand] public async Task StartAsync()
     {
-        if (Busy || !CanConfigure) return; Busy = true; Error = "";
+        if (!initialized || Busy || !CanConfigure) return; Busy = true; Error = "";
         previewRefresh.Stop(); previewSuspended = false;
         try { loaded = ReadSettings(); settingsSaver.RequestSave(loaded); await settingsSaver.FlushAsync(); await coordinator.StartAsync(loaded); }
         catch (Exception ex) { Error = ex.Message; }

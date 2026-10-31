@@ -1,5 +1,13 @@
 # Build validation — October 31, 2026
 
+## Recreating deleted daily folders
+
+- Added an explicit synchronous directory-creation attempt at the beginning of every event, while retaining creation before every part. Invalid/nonabsolute roots are rejected; no alternate output destination is selected. The existing part callback already attempted creation, so deletion alone was not established as the cause of the reported switch to the default Videos folder.
+- Found and removed a separate fallback path: a settings-read error previously allowed initialization with defaults, and preview could clear the displayed error. Initialization now stops with recording disabled and preserves the settings file. A directory occupying the settings-file path is now an error rather than a false "first launch" detection.
+- Release builds succeeded without compiler warnings/errors; all 35 xUnit tests and native ring checks passed. Added checks that settings retain the selected root after deleting its daily folder and the root itself, and that an unreadable settings path does not return defaults.
+- `verify-folders artifacts/folder-recreate-regression`: three events in the same live synthetic capture session. Each completed test file was preserved outside its daily folder, then the empty daily folder was deleted. Every subsequent Begin recreated the same selected date folder; no recording changed destinations. The three MP4 files fully decode and pass index/seeking checks (263 video frames; maximum initial audio/video PTS difference 11.33 ms).
+- These checks do not reproduce removal of a folder containing an actively open recording. The initial report's exact cause remains unconfirmed; the tests cover deletion between completed events and settings persistence/error handling.
+
 ## Tray recovery and reopening a hidden window
 
 - The reported instance was running without a targetable window. Its last recording had finalized, and no `.partial.mp4` files remained in the configured output tree. Managed stacks showed the UI message loop and background work; they did not establish a deadlock. The inaccessible old process was terminated only after verifying that no recording was unfinished. The original disappearance mechanism is unconfirmed because the old version ignored Shell registration results.

@@ -13,8 +13,11 @@ public sealed class JsonSettingsStore : ISettingsStore
     public JsonSettingsStore(string? path = null) => this.path = Path.GetFullPath(path ?? Path.Combine(DataDirectory, "settings.json"));
     public async Task<RecorderSettings> LoadAsync()
     {
-        if (!File.Exists(path)) return new();
-        using var input = File.OpenRead(path);
+        FileStream input;
+        try { input = File.OpenRead(path); }
+        catch (FileNotFoundException) { return new(); }
+        catch (DirectoryNotFoundException) { return new(); }
+        using var ownedInput = input;
         var settings = await JsonSerializer.DeserializeAsync<RecorderSettings>(input) ?? throw new InvalidDataException("The settings file is invalid.");
         settings.Validate(false); return settings;
     }

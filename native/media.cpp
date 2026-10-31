@@ -140,13 +140,18 @@ class Mp4Writer {
     std::vector<std::string> closed_files;
     std::filesystem::path output_directory;
     std::string filename_pattern;
+    std::filesystem::path ensure_daily_directory() const {
+        SYSTEMTIME now; GetLocalTime(&now);
+        char day[16]; sprintf_s(day, "%04u-%02u-%02u", now.wYear, now.wMonth, now.wDay);
+        const auto folder = output_directory / day;
+        // Retry creation for every event and part, even if this folder existed previously.
+        std::filesystem::create_directories(folder);
+        return folder;
+    }
     static gchar* format_location(GstElement* mux, guint part_id, gpointer data) noexcept {
         auto& self = *static_cast<Mp4Writer*>(data);
         try {
-            SYSTEMTIME now; GetLocalTime(&now);
-            char day[16]; sprintf_s(day, "%04u-%02u-%02u", now.wYear, now.wMonth, now.wDay);
-            const auto folder = self.output_directory / day;
-            std::filesystem::create_directories(folder);
+            const auto folder = self.ensure_daily_directory();
             char name[192]; sprintf_s(name, self.filename_pattern.c_str(), part_id);
             const auto path = (folder / name).u8string();
             return g_strdup(reinterpret_cast<const char*>(path.c_str()));
@@ -240,6 +245,9 @@ class Mp4Writer {
 public:
     Mp4Writer(EventQueue& sink, const std::string& directory, int part_seconds, uint64_t start) : events(sink), origin(start), output_directory(utf8_path(directory)) {
         try {
+            if (!output_directory.is_absolute()) throw std::runtime_error("The recording output folder must be an absolute path");
+            // Fail at Begin rather than accepting an event with an unavailable destination.
+            ensure_daily_directory();
             pipeline = parse("appsrc name=video format=time is-live=false block=false max-bytes=134217728 ! h264parse ! queue max-size-buffers=0 max-size-bytes=8388608 max-size-time=0 ! mux.video appsrc name=audio format=time is-live=false block=false max-bytes=134217728 ! aacparse ! queue max-size-buffers=0 max-size-bytes=1048576 max-size-time=0 ! mux.audio_0 splitmuxsink name=mux async-finalize=true muxer-factory=mp4mux");
             video = gst_bin_get_by_name(GST_BIN(pipeline), "video"); audio = gst_bin_get_by_name(GST_BIN(pipeline), "audio");
             auto* mux = gst_bin_get_by_name(GST_BIN(pipeline), "mux");

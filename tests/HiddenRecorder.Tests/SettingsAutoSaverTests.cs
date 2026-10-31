@@ -80,6 +80,37 @@ public sealed class SettingsAutoSaverTests
         finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
     }
 
+    [Fact] public async Task UnreadableSettingsAreNotTreatedAsMissingSettings()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "HR-settings-test-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(root, "settings.json");
+        Directory.CreateDirectory(path); // File.Exists returns false for an existing directory.
+        try
+        {
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new JsonSettingsStore(path).LoadAsync());
+            Assert.True(Directory.Exists(path));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact] public async Task RemovingDailyFolderDoesNotChangeSavedOutputRoot()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "HR-settings-test-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(root, "settings.json");
+        var output = Path.Combine(root, "chosen-recordings");
+        var day = Path.Combine(output, "2026-10-31");
+        Directory.CreateDirectory(day);
+        try
+        {
+            await new JsonSettingsStore(path).SaveAsync(Options with { OutputDirectory = output });
+            Directory.Delete(day);
+            Assert.Equal(output, (await new JsonSettingsStore(path).LoadAsync()).OutputDirectory);
+            Directory.Delete(output);
+            Assert.Equal(output, (await new JsonSettingsStore(path).LoadAsync()).OutputDirectory);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     private sealed class Store : ISettingsStore
     {
         public List<RecorderSettings> Written { get; } = [];
