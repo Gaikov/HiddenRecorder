@@ -25,7 +25,7 @@ $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Componen
 $crt = Get-ChildItem -Path (Join-Path $vs 'VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT') -Directory | Select-Object -Last 1
 if (-not $crt) { throw 'VC143 redistributable DLLs not found' }
 Get-ChildItem -LiteralPath $crt.FullName -Filter '*.dll' | Copy-Item -Destination $destination
-Copy-Item README.md,THIRD-PARTY-NOTICES.md,VALIDATION.md -Destination $destination
+Copy-Item README.md,DEVELOPMENT.md,THIRD-PARTY-NOTICES.md,VALIDATION.md -Destination $destination
 $noticeTarget = Join-Path $destination 'licenses'
 New-Item -ItemType Directory -Force $noticeTarget | Out-Null
 $nugetRoot = if ($env:NUGET_PACKAGES) { $env:NUGET_PACKAGES } else { Join-Path $env:USERPROFILE '.nuget\packages' }
