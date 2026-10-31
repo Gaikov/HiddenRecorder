@@ -1,5 +1,13 @@
 # Build validation — October 31, 2026
 
+## Tray recovery and reopening a hidden window
+
+- The reported instance was running without a targetable window. Its last recording had finalized, and no `.partial.mp4` files remained in the configured output tree. Managed stacks showed the UI message loop and background work; they did not establish a deadlock. The inaccessible old process was terminated only after verifying that no recording was unfinished. The original disappearance mechanism is unconfirmed because the old version ignored Shell registration results.
+- Added checked/logged registration, a stable tray GUID, recovery on `TaskbarCreated`, and a ten-second retry/check. Replaced raw window-procedure replacement with the subclass chain API. If tray registration fails, the window remains accessible rather than hiding. Added event-based single-instance activation so running the EXE again restores the existing window.
+- Release C++/WinUI builds succeeded without compiler warnings/errors; all 33 xUnit tests and native ring checks passed. The portable candidate logged successful tray registration and reached Previewing with the user's saved settings. The screenshot confirms the window and live preview.
+- Through the real UI, clicked the title-bar close button and confirmed that the window disappeared while its process remained. Launching the EXE again restored the same process/window; the second process exited. Clicking Exit in the restored window then removed the process completely without force. Monitoring was not enabled during these checks.
+- Explorer was not restarted, and a Shell registration failure was not injected. Recovery after those conditions is implemented but not exercised in this pass. Successful Shell registration was confirmed; the icon's placement in Windows' visible/overflow notification area was not visually checked. The updated portable folder is left closed for the user.
+
 ## Daily recording folders
 
 - Each new MP4 part is created in an automatically created local-date `YYYY-MM-DD` subfolder of the configured output root. Finalization and recovery keep files in that folder. An open file is not forcibly split at midnight; the date is evaluated again for the next part. Existing flat recordings are preserved.

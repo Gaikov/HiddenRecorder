@@ -71,6 +71,8 @@ Monitoring stops when free space falls below **1 GiB**. Old recordings are not d
 
 The window's close button **hides the app in the notification area** instead of exiting. The camera and microphone remain active, and monitoring continues if enabled. Use the tray icon to open the window, start or stop monitoring, or exit.
 
+If you cannot find the tray icon, **run `HiddenRecorder.App.exe` again** to reopen the existing window. This does not start another recorder. Windows may place the icon in its hidden-icons menu. The app attempts to restore a missing icon; if registration fails, closing the window minimizes it to the taskbar instead of hiding it.
+
 To fully close the app and release the devices, choose **Exit**. After the computer wakes from sleep, start monitoring again or click **Refresh devices** to restore the preview.
 
 ## Troubleshooting

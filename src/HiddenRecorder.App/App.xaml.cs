@@ -5,7 +5,7 @@ using HiddenRecorder.Infrastructure;
 namespace HiddenRecorder.App;
 public partial class App : Application
 {
-    private Mutex? instance;
+    private SingleInstance? instance;
     private MainWindow? window;
     private readonly RollingLog log = new();
     public App()
@@ -20,9 +20,15 @@ public partial class App : Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         log.Write("Creating main window");
-        instance = new Mutex(true, "Local\\HiddenRecorder.Desktop", out var first);
-        if (!first) { MessageBoxW(0, "HiddenRecorder is already running. Open it using the system tray icon.", "HiddenRecorder", 0x40); Exit(); return; }
+        instance = new SingleInstance();
+        if (!instance.IsPrimary)
+        {
+            if (!instance.ShowExisting()) MessageBoxW(0, "Could not contact the running HiddenRecorder window. Please try again.", "HiddenRecorder", 0x40);
+            instance.Dispose(); instance = null; Exit(); return;
+        }
         window = new MainWindow(); log.Write("Activating main window"); window.Activate(); log.Write("Main window activated");
+        instance.Listen(() => window.DispatcherQueue.TryEnqueue(() => { log.Write("Existing instance activation received"); window.Restore(); }));
+        window.Closed += (_, _) => { instance?.Dispose(); instance = null; };
     }
     [DllImport("user32", CharSet = CharSet.Unicode)] private static extern int MessageBoxW(nint window, string text, string caption, uint type);
 }

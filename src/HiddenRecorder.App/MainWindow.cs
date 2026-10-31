@@ -33,7 +33,7 @@ public sealed class MainWindow : Window
         {
             AppWindow.SetIcon(ApplicationIcon.FilePath);
             var hwnd = WindowNative.GetWindowHandle(this);
-            desktop = new(hwnd, DispatcherQueue);
+            desktop = new(hwnd, DispatcherQueue, log);
             media = new(); media.Attach(desktop.PreviewWindow);
             coordinator = new(media, media, new StorageGuard(), desktop, power, log);
             viewModel = new(media, new JsonSettingsStore(), coordinator, DispatcherQueue);
@@ -45,7 +45,17 @@ public sealed class MainWindow : Window
             desktop.StopRequested += async () => await viewModel.StopAsync();
             desktop.ExitRequested += async () => await ExitAsync();
             desktop.SuspendRequested += async () => await viewModel.SuspendAsync();
-            AppWindow.Closing += (_, args) => { if (!exiting) { args.Cancel = true; hidden = true; desktop.ShowPreview(false); AppWindow.Hide(); } };
+            AppWindow.Closing += (_, args) =>
+            {
+                if (exiting) return;
+                args.Cancel = true;
+                if (desktop.EnsureTrayIcon()) { hidden = true; desktop.ShowPreview(false); AppWindow.Hide(); }
+                else
+                {
+                    viewModel.Error = "The tray icon is unavailable. The app stays on the taskbar; use Exit to close it.";
+                    if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter) presenter.Minimize();
+                }
+            };
             Closed += (_, _) => { layoutTimer.Stop(); desktop.Dispose(); power.Dispose(); };
             Activated += (_, _) => UpdatePreview();
             layoutTimer.Tick += (_, _) => UpdatePreview(); layoutTimer.Start();
@@ -143,7 +153,13 @@ public sealed class MainWindow : Window
         media.Resize(w, h);
         desktop.ShowPreview(!hidden && !dialogOpen && coordinator?.Snapshot.State is RecorderState.PreviewStarting or RecorderState.Previewing or RecorderState.Starting or RecorderState.Armed or RecorderState.Recording or RecorderState.Finalizing);
     }
-    private void Show() { hidden = false; AppWindow.Show(); Activate(); UpdatePreview(); }
+    public void Restore() { if (!exiting) Show(); }
+    private void Show()
+    {
+        hidden = false; AppWindow.Show();
+        if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter && presenter.State == Microsoft.UI.Windowing.OverlappedPresenterState.Minimized) presenter.Restore();
+        Activate(); UpdatePreview();
+    }
     private async Task OfferRecoveryAsync(bool explicitRequest = false)
     {
         if (viewModel is null || !viewModel.CanConfigure || dialogOpen) return;
