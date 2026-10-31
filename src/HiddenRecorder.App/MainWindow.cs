@@ -97,6 +97,13 @@ public sealed class MainWindow : Window
         settings.Children.Add(Text("Настройки", 22));
         var settingsMessage = Text(""); Bind(settingsMessage, TextBlock.TextProperty, nameof(vm.SettingsMessage)); settings.Children.Add(settingsMessage);
         settings.Children.Add(Text("MP4 · H.264 + AAC\nЧасти по 60 минут · резерв диска 1 ГиБ"));
+        void Number(string title, string property, double minimum, double maximum)
+        {
+            var input = new NumberBox { Header = title, Minimum = minimum, Maximum = maximum, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Hidden };
+            Bind(input, NumberBox.ValueProperty, property, true); settings.Children.Add(input);
+        }
+        Number("Задержка остановки после звука, с", nameof(vm.SilenceSeconds), 1, 86400);
+        settings.Children.Add(Text("Каждый звук, прошедший порог и фильтр, заново запускает этот таймер. 300 с = 5 мин, 600 с = 10 мин. Диапазон: 1 с — 24 ч."));
         ComboBox Combo(string title, object items, string property, string? member = null)
         {
             var control = new ComboBox { Header = title, ItemsSource = items, HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -105,13 +112,7 @@ public sealed class MainWindow : Window
         }
         Combo("Камера", vm.Cameras, nameof(vm.SelectedCamera), "Name"); Combo("Режим видео", vm.Modes, nameof(vm.SelectedMode)); Combo("Микрофон", vm.Microphones, nameof(vm.SelectedMicrophone), "Name");
         settings.Children.Add(Button("Обновить устройства", async (_, _) => await vm.RefreshCommand.ExecuteAsync(null)));
-        void Number(string title, string property, double minimum, double maximum)
-        {
-            var input = new NumberBox { Header = title, Minimum = minimum, Maximum = maximum, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Hidden };
-            Bind(input, NumberBox.ValueProperty, property, true); settings.Children.Add(input);
-        }
         Number("Предзапись, секунды", nameof(vm.PreRollSeconds), 1, 30);
-        Number("Остановка после тишины, секунды", nameof(vm.SilenceSeconds), 1, 86400);
         Number("Порог громкости, dBFS", nameof(vm.ThresholdDb), -60, 0);
         Number("Минимальный звук, мс (0 — любой)", nameof(vm.MinimumSoundMs), 0, 1000);
         Number("Битрейт видео, кбит/с", nameof(vm.VideoBitrateKbps), 250, 20000);

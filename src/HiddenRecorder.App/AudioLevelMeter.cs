@@ -10,6 +10,8 @@ namespace HiddenRecorder.App;
 public sealed class AudioLevelMeter : UserControl
 {
     private readonly Grid scale = new() { Margin = new Thickness(0, 10, 0, 10) };
+    private readonly SolidColorBrush normalBrush = new(Colors.MediumSeaGreen);
+    private readonly SolidColorBrush aboveThresholdBrush = new(Colors.Red);
     private readonly Border fill = new() { Width = 20, HorizontalAlignment = HorizontalAlignment.Left,
         VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(36, 0, 0, 0), Background = new SolidColorBrush(Colors.MediumSeaGreen) };
     private readonly Border marker = new() { Width = 36, Height = 3, HorizontalAlignment = HorizontalAlignment.Left,
@@ -35,6 +37,8 @@ public sealed class AudioLevelMeter : UserControl
     private void Update()
     {
         fill.Height = scale.ActualHeight * Fraction(Level);
+        fill.Background = double.IsFinite(Level) && double.IsFinite(Threshold) && Level >= Threshold
+            ? aboveThresholdBrush : normalBrush;
         marker.Margin = new Thickness(28, 0, 0, Math.Max(0, (scale.ActualHeight - marker.Height) * Fraction(Threshold)));
         AutomationProperties.SetName(this, $"Микрофон {Level:0.0} dBFS, порог {Threshold:0.0} dBFS");
     }

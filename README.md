@@ -29,7 +29,7 @@ The current application interface is in Russian; control names below are transla
 
 1. Select a camera, microphone, and video mode. The preview and microphone level appear automatically once the devices are ready.
 2. Choose an output folder, the pre-recording duration, and the silence timeout.
-3. Adjust the threshold using the level meter: the orange marker shows the trigger level. Normal background noise should stay below this marker.
+3. Adjust the threshold using the level meter: the orange marker shows the trigger level. The meter turns red when the microphone reaches or exceeds the threshold and green when it falls below it. Normal background noise should stay below the marker.
 4. Click **Start monitoring**. Sounds above the threshold will now start a recording.
 5. To finish the current recording and disable new triggers, click **Stop recording**. The camera preview and level meter stay active.
 
@@ -44,7 +44,7 @@ The save status appears below the Settings heading. Incomplete or invalid values
 | Setting | Purpose | Default |
 |---|---|---|
 | Pre-recording | Seconds before the loud sound to include in the file; range: 1–30 seconds | 5 seconds |
-| Silence timeout | How long to wait after the last loud sound; range: 1 second to 24 hours | 300 seconds (5 minutes) |
+| Stop delay after sound | How long to record after the last triggering sound; each new trigger restarts the full timer. Range: 1 second to 24 hours | 300 seconds (5 minutes) |
 | Sound threshold | Trigger sensitivity: closer to −60 is more sensitive; closer to 0 requires a louder sound | −25 dBFS |
 | Minimum sound duration | How long the sound must stay above the threshold; helps ignore short clicks | 0 ms — filter disabled |
 | Video mode | Resolution and frame rate supported by the camera | Preferably 1920 × 1080 at 30 FPS |
@@ -52,6 +52,8 @@ The save status appears below the Settings heading. Incomplete or invalid values
 | Output folder | Where files are saved | `Videos\HiddenRecorder` in your user folder |
 
 The threshold measures the microphone signal level, not physical sound pressure in the room. Use the meter: make a test sound and adjust the threshold for your environment.
+
+The stop-delay setting is at the top of the settings panel. Enter 300 for 5 minutes or 600 for 10 minutes. Sounds must also pass the minimum-duration filter, if enabled, to restart the timer. The red meter shows the current level relative to the threshold, even before a sound passes that filter or monitoring is enabled.
 
 You can also change the video and audio bitrates. Higher values generally increase quality and file size. The recording format is MP4.
 

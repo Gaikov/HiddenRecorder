@@ -1,5 +1,13 @@
 # Build validation — October 31, 2026
 
+## Microphone threshold color and stop-delay setting
+
+- The microphone meter now uses red at or above the configured threshold and green below it. Both level and threshold changes update the brush; invalid values use green. The orange threshold marker remains visible. This feedback does not depend on monitoring or the duration filter.
+- Moved the existing `SilenceSeconds` field to the top of settings and labeled it as the stop delay after sound. Added help explaining that every qualifying sound restarts the full interval, with 300/600-second examples and the 1-second to 24-hour range. Existing settings and autosaving are preserved.
+- WinUI Release built with zero warnings/errors. All 32 xUnit tests passed, including renewal of the five-minute deadline, continuous sound, stop-boundary triggers, and settings persistence. Published with `package.ps1 -SkipBuild -NoArchive`; GUI EXE, PRI, and dependency checks passed.
+- The published app launched in Previewing. Screenshots now confirm the camera preview, green level meter, orange threshold marker, and the stop-delay field and help text at the top of settings. This run supersedes the earlier screenshot-capture limitation for these specific controls; other outstanding acceptance checks remain unchanged.
+- Changed the timer from 300 to 600 seconds through the actual WinUI control and verified `SilenceSeconds: 600` in JSON without enabling monitoring. Restored 300 seconds afterward. Temporarily changed the threshold to −60 dBFS and restored the original −40 dBFS. A red-state screenshot was not captured: the microphone stayed below the threshold during those observations. No recording was started for this UI check.
+
 ## MP4 seeking compatibility
 
 - Following a report of frozen video after seeking, `mp4mux` was changed to ordinary MP4 with full indexes updated once per second through robust muxing. Codecs remain H.264 + AAC. Index reservation and updates apply to every part, including the first.
