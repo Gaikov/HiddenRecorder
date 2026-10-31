@@ -19,6 +19,8 @@ The current version is a preview release. It supports one local camera and one m
 
 ## Getting started
 
+Download the portable ZIP from [GitHub Releases](https://github.com/Gaikov/HiddenRecorder/releases). The version number is shown in the app window.
+
 You need **Windows 10 22H2 or Windows 11 x64**, a camera, and a microphone. Windows must allow desktop apps to access these devices. Windows N editions also require the Media Feature Pack.
 
 Open the application folder and run **`HiddenRecorder.App.exe`**. If you received a ZIP archive, extract the entire archive first. Keep the EXE together with the other files in the folder.

@@ -69,7 +69,21 @@ Requirements: Python 3.10+, CMake, Visual Studio 2022 C++ Build Tools (MSVC v143
 
 To build an unpacked folder without a ZIP, use `./scripts/package.ps1 -NoArchive -OutputDirectory artifacts/HiddenRecorder-candidate`. The output directory must not already exist: publishing over a previous build leaves removed dependencies behind. Validate the candidate, exit the running app normally, then move the previous published folder aside and rename the candidate to `artifacts/HiddenRecorder-win-x64`. Publishing checks WinUI resources, a GUI-subsystem EXE, local .NET/VC runtime files, the GStreamer dependency manifest, and the absence of unused AI/ML DLLs. GStreamer scans libraries in-process rather than launching a separate console scanner.
 
-Pinned versions: .NET SDK 10.0.403, GStreamer 1.26.11 MSVC x64, Windows App SDK WinUI 1.8.260803003 and DWrite 1.8.25122902 (component versions from the previously used 1.8.260921001 metapackage). GStreamer hashes are checked before extraction; NuGet dependencies are pinned in lock files. The default output is `artifacts/HiddenRecorder-win-x64`; an archive is also created unless `-NoArchive` is supplied. Licenses: `THIRD-PARTY-NOTICES.md`, `licenses`, and `gstreamer/share/licenses` in the package.
+Pinned versions: .NET SDK 10.0.403, GStreamer 1.26.11 MSVC x64, Windows App SDK WinUI 1.8.260803003 and DWrite 1.8.25122902 (component versions from the previously used 1.8.260921001 metapackage). GStreamer hashes are checked before extraction; NuGet dependencies are pinned in lock files. The default output is `artifacts/HiddenRecorder-win-x64`; a versioned archive under `releases/vVERSION` is also created unless `-NoArchive` is supplied. Licenses: `THIRD-PARTY-NOTICES.md`, `licenses`, and `gstreamer/share/licenses` in the package.
+
+### Versioning and releases
+
+`Version.props` is the single version source, imported by `Directory.Build.props`. Use `MAJOR.MINOR.PATCH`: increment PATCH for fixes, MINOR for features, and MAJOR for incompatible changes. Before 1.0, releases are previews and minor versions may include incompatible changes. The initial release is 0.1.0, tagged `v0.1.0` and marked as a GitHub prerelease. Managed assemblies and the EXE receive this version; the main window title and heading display it. Assembly/file versions add a fourth `.0` component, while the informational version also identifies the source commit.
+
+For a release, update `Version.props`, add English notes in `releases/VERSION.md`, and update `releases/README.md`. Build and validate an unpacked candidate with `-NoArchive`, then record actual checks in `VALIDATION.md` and commit the source and documentation. Run packaging again from that clean commit using a fresh output folder:
+
+```powershell
+./scripts/package.ps1 -SkipBuild -OutputDirectory artifacts/HiddenRecorder-0.1.0-win-x64
+```
+
+Use `-SkipBuild` only when the native build and tests already match the current source. Packaging still publishes the managed app with the current commit metadata. It verifies the EXE version and writes `release.json` with version, expected tag, source commit, working-tree status, and runtime. Archive creation requires a clean working tree. Output files are `releases/v0.1.0/HiddenRecorder-0.1.0-win-x64.zip` and a SHA-256 sidecar; existing release directories are never overwritten. `-NoArchive` allows uncommitted candidates for validation.
+
+Extract the ZIP into a fresh directory and validate its contents, versions, and checksum. Create an annotated `vVERSION` tag at the exact commit recorded in `release.json`, push that commit and tag, then upload the ZIP and checksum to GitHub Releases. Publish only after both uploads are verified. Keep generated archives out of Git: `releases/v*/` is ignored; the repository contains release descriptions and download links. Never move a published tag or replace its assets with another build; publish a new version for corrections.
 
 ### Portable dependency selection
 

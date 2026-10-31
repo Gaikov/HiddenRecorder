@@ -26,7 +26,7 @@ public sealed class MainWindow : Window
     private bool exiting, hidden, dialogOpen;
     public MainWindow()
     {
-        Title = "HiddenRecorder — sound-triggered recording";
+        Title = $"HiddenRecorder {App.Version} — sound-triggered recording";
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1180, 880));
         Content = root;
         try
@@ -78,7 +78,7 @@ public sealed class MainWindow : Window
         root.RowDefinitions.Add(new() { Height = GridLength.Auto }); root.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
         root.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) }); root.ColumnDefinitions.Add(new() { Width = new GridLength(340) });
         var heading = new StackPanel { Spacing = 6 };
-        heading.Children.Add(Text("HiddenRecorder", 30)); heading.Children.Add(Text("Camera and audio · record when sound exceeds the threshold", 14));
+        heading.Children.Add(Text($"HiddenRecorder {App.Version}", 30)); heading.Children.Add(Text("Camera and audio · record when sound exceeds the threshold", 14));
         Grid.SetColumnSpan(heading, 2); root.Children.Add(heading);
         var left = new Grid { RowSpacing = 16 };
         foreach (var h in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto }) left.RowDefinitions.Add(new() { Height = h });

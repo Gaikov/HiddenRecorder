@@ -1,5 +1,12 @@
 # Build validation — October 31, 2026
 
+## Versioned 0.1.0 preview candidate
+
+- Built `artifacts/HiddenRecorder-version-check-0.1.0` with the shared `Version.props`. C++/WinUI Release builds succeeded with no compiler warnings/errors; all 35 xUnit tests and native ring-buffer checks passed. The full development GStreamer scan still warns about its unused Python plugin, which is not shipped.
+- Portable package checks passed. The EXE reports file version `0.1.0.0` and product version `0.1.0` with the source commit suffix. `release.json` correctly marks this pre-commit validation candidate as dirty; release archive creation requires a clean commit.
+- Launched the candidate: its window title and accessibility heading contain `HiddenRecorder 0.1.0`; it reached preview and filled the pre-recording buffer without enabling monitoring. No settings were edited. The screenshot returned desktop wallpaper, and automated Exit failed with `failed to activate captured window` even after selecting the window again. The user was asked to close the test instance; this pass does not claim visual or Exit validation.
+- Changes in this pass concern version metadata, display, packaging, and documentation. Media behavior was not changed; prior recording, seeking, and daily-folder checks are recorded below. Clean-machine and extended acceptance checks remain outstanding, so 0.1.0 is a preview.
+
 ## Recreating deleted daily folders
 
 - Added an explicit synchronous directory-creation attempt at the beginning of every event, while retaining creation before every part. Invalid/nonabsolute roots are rejected; no alternate output destination is selected. The existing part callback already attempted creation, so deletion alone was not established as the cause of the reported switch to the default Videos folder.

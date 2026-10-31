@@ -2,6 +2,11 @@ param([switch]$SkipBuild, [switch]$NoArchive, [string]$OutputDirectory)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
+$version = ([xml](Get-Content -LiteralPath (Join-Path $root 'Version.props') -Raw)).Project.PropertyGroup.Version
+if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid release version: $version" }
+$releaseDirectory = Join-Path $root "releases\v$version"
+$archive = Join-Path $releaseDirectory "HiddenRecorder-$version-win-x64.zip"
+if (-not $NoArchive -and (Test-Path -LiteralPath $releaseDirectory)) { throw "Release directory already exists; do not overwrite a release: $releaseDirectory" }
 $destination = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $root 'artifacts\HiddenRecorder-win-x64' }
 # Never publish over an old directory: removed NuGet dependencies would survive there.
 if (Test-Path -LiteralPath $destination) { throw "Output directory already exists. Move the previous build aside, or supply a new -OutputDirectory: $destination" }
@@ -28,11 +33,21 @@ foreach ($package in @('communitytoolkit.mvvm\8.4.2','microsoft.windowsappsdk.wi
     }
 }
 & "$PSScriptRoot\check-publish.ps1" -Directory $destination
+$productVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $destination 'HiddenRecorder.App.exe')).ProductVersion
+if (($productVersion -split '\+')[0] -ne $version) { throw "EXE version does not match Version.props: $productVersion" }
+$commit = git rev-parse HEAD
+if ($LASTEXITCODE -ne 0) { throw 'Cannot identify the source commit' }
+$dirty = [bool](git status --porcelain)
+@{ version = $version; tag = "v$version"; commit = $commit; dirty = $dirty; runtime = 'win-x64' } |
+    ConvertTo-Json | Set-Content -LiteralPath (Join-Path $destination 'release.json') -Encoding utf8
 if ($NoArchive) {
     Write-Host (Join-Path $destination 'HiddenRecorder.App.exe')
 } else {
-    $archive = Join-Path $root 'artifacts\HiddenRecorder-win-x64.zip'
-    Compress-Archive -Path "$destination\*" -DestinationPath $archive -Force
-    Get-FileHash $archive -Algorithm SHA256 | Format-List
+    if ($dirty) { throw 'Commit source changes before creating a release archive. The unpacked build is available for validation.' }
+    New-Item -ItemType Directory -Path $releaseDirectory | Out-Null
+    Compress-Archive -Path "$destination\*" -DestinationPath $archive -CompressionLevel Optimal
+    $checksum = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    "$checksum  $([IO.Path]::GetFileName($archive))" | Set-Content -LiteralPath "$archive.sha256" -Encoding ascii
     Write-Host $archive
+    Write-Host "$archive.sha256"
 }

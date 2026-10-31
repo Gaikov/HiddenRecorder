@@ -5,6 +5,7 @@ using HiddenRecorder.Infrastructure;
 namespace HiddenRecorder.App;
 public partial class App : Application
 {
+    public static string Version => System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(App).Assembly)?.InformationalVersion.Split('+')[0] ?? "unknown";
     private SingleInstance? instance;
     private MainWindow? window;
     private readonly RollingLog log = new();
