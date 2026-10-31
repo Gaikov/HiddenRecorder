@@ -1,0 +1,13 @@
+.tools/
+build/
+artifacts/
+**/bin/
+**/obj/
+*.user
+.vs/
+TestResults/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
