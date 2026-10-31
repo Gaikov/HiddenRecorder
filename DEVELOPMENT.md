@@ -61,9 +61,24 @@ Requirements: Python 3.10+, CMake, Visual Studio 2022 C++ Build Tools (MSVC v143
 ./scripts/package.ps1 -SkipBuild
 ```
 
-To update only the published EXE folder without creating a ZIP, use `./scripts/package.ps1 -NoArchive`. Publishing automatically checks for WinUI resources (`HiddenRecorder.App.pri`) and a GUI-subsystem EXE. GStreamer scans libraries in-process rather than launching a separate console scanner.
+To build an unpacked folder without a ZIP, use `./scripts/package.ps1 -NoArchive -OutputDirectory artifacts/HiddenRecorder-candidate`. The output directory must not already exist: publishing over a previous build leaves removed dependencies behind. Validate the candidate, exit the running app normally, then move the previous published folder aside and rename the candidate to `artifacts/HiddenRecorder-win-x64`. Publishing checks WinUI resources, a GUI-subsystem EXE, local .NET/VC runtime files, the GStreamer dependency manifest, and the absence of unused AI/ML DLLs. GStreamer scans libraries in-process rather than launching a separate console scanner.
 
-Pinned versions: .NET SDK 10.0.403, GStreamer 1.26.11 MSVC x64, Windows App SDK 1.8.260921001. GStreamer hashes are checked before extraction; NuGet dependencies are pinned in lock files. Output: `artifacts/HiddenRecorder-win-x64.zip`. Licenses: `THIRD-PARTY-NOTICES.md` and `gstreamer/share/licenses` in the package.
+Pinned versions: .NET SDK 10.0.403, GStreamer 1.26.11 MSVC x64, Windows App SDK WinUI 1.8.260803003 and DWrite 1.8.25122902 (component versions from the previously used 1.8.260921001 metapackage). GStreamer hashes are checked before extraction; NuGet dependencies are pinned in lock files. The default output is `artifacts/HiddenRecorder-win-x64`; an archive is also created unless `-NoArchive` is supplied. Licenses: `THIRD-PARTY-NOTICES.md`, `licenses`, and `gstreamer/share/licenses` in the package.
+
+### Portable dependency selection
+
+The app references WinUI and DWrite components directly, retaining WinUI's Foundation, Base, and InteractiveExperiences dependencies. DWrite is retained for the text-rendering component set. AI, ML, Widgets, and the framework Runtime metapackage are not referenced. This follows the [Windows App SDK component package model](https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/release-notes/windows-app-sdk-1-8#new-features). Both .NET and Windows App SDK remain self-contained; the VC143 CRT is copied next to the EXE. No trimming, installed shared framework, or system GStreamer is required. Windows media components and device drivers remain OS prerequisites (Windows N needs Media Feature Pack).
+
+`scripts/package_gstreamer.py` declares the selected media plugins and traverses ordinary and delay-load PE imports from those plugins, the scanner, and the native adapter. It copies only the reachable runtime DLLs from the pinned GStreamer SDK. The present closure is 26 of 130 DLLs; all 20 selected plugins and upstream license texts remain. `gstreamer/dependencies.json` records the included libraries and platform dependencies. Missing unresolved imports fail packaging. Dynamic element loading is covered by the explicit plugin list; PE analysis alone cannot prove every runtime path, so repeat media and UI checks when changing versions or plugins.
+
+For an isolated native test of the actual delivered adapter/runtime:
+
+```powershell
+python scripts/exercise_media.py --package artifacts/HiddenRecorder-candidate --hardware --seconds 28 --output artifacts/portable-hardware
+python scripts/verify_media.py artifacts/portable-hardware --require-index
+```
+
+`--package` replaces PATH with the package and Windows directories and uses a separate GStreamer registry. For synthetic OpenH264 tests, supply `--test-plugins` pointing to a separate folder containing only `gstvideotestsrc.dll` and `gstaudiotestsrc.dll` from the pinned SDK; these test plugins are not shipped. GUI portability checks should likewise use a restricted PATH and a fresh registry, then inspect loaded module paths to ensure .NET, WinUI, GStreamer, and VC CRT come from the package. These checks do not replace clean Windows 10/11 VM testing.
 
 ## Architecture
 

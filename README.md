@@ -23,6 +23,8 @@ You need **Windows 10 22H2 or Windows 11 x64**, a camera, and a microphone. Wind
 
 Open the application folder and run **`HiddenRecorder.App.exe`**. If you received a ZIP archive, extract the entire archive first. Keep the EXE together with the other files in the folder.
 
+No application installation is required. To use it on another supported computer, copy the **entire application folder** and run the EXE there. Settings and recordings remain local to each computer; copying the app folder does not transfer them.
+
 The application interface is in English.
 
 ## Your first recording
