@@ -1,5 +1,12 @@
 # Build validation — October 31, 2026
 
+## Application icon
+
+- Generated a camera/spy icon with the built-in image generation tool and committed the original transparent PNG plus a nine-size ICO. Source corner alpha is 0; ICO dimensions are 16, 20, 24, 32, 40, 48, 64, 128, and 256 pixels. All frame bounds and PNG dimensions were checked, and Windows decoded the 16-pixel icon successfully.
+- Embedded the icon in the EXE, set it on the WinUI window, and replaced the stock tray icon with an owned HICON released through SafeHandle. The package check now requires the ICO. Removed duplicate implicit WinUI Content entries discovered during the first build.
+- Release built without warnings/errors and the portable folder was updated without a ZIP. The published EXE contains an icon group and nine icon image resources; the source PNG is not included in runtime content.
+- The existing active recording was finalized through Exit before publishing; its completed `.mp4` file was confirmed. The new build launches, and a screenshot confirms the new icon in the title bar. Tray icon loading succeeded during initialization, but its appearance in the notification area was not separately captured. Monitoring remains off after restart, following the normal startup behavior.
+
 ## English interface and stop delay in minutes
 
 - Translated application-owned controls, states, dialogs, tray text, accessibility labels, notifications, and error messages into English. A scan of application and native source found no remaining Cyrillic text. System-supplied device names, paths, and error details are not translated.

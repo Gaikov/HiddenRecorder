@@ -67,6 +67,8 @@ Pinned versions: .NET SDK 10.0.403, GStreamer 1.26.11 MSVC x64, Windows App SDK 
 
 ## Architecture
 
+The application icon lives in `src/HiddenRecorder.App/Assets`: the original generated PNG, a multi-resolution ICO, and its generation prompt in the asset README. Regenerate the ICO on Windows with `./scripts/create-icon.ps1`; the committed ICO lets normal builds run without generation tools. The project embeds it as `ApplicationIcon` and publishes one copy for `AppWindow.SetIcon` and the system tray. `ApplicationIcon` owns the tray HICON through `SafeHandle` and releases it after removing the tray entry. Source artwork and its README are excluded from runtime content. `check-publish.ps1` requires the ICO alongside the other runtime files.
+
 - **Core / Domain:** immutable settings, states, and `SoundTriggerPolicy`, with no UI or GStreamer dependencies.
 - **Core / Application:** `RecordingCoordinator` is an actor with a single queue reader. External dependencies are supplied through interfaces and the constructor. The timer uses `TimeProvider.GetTimestamp()`; wall-clock changes do not affect recording duration.
 - **Infrastructure:** P/Invoke adapter with `SafeHandle`, JSON settings, storage checks, power requests, logging, and MP4 recovery. GStreamer path configuration is process-local.

@@ -31,6 +31,7 @@ public sealed class MainWindow : Window
         Content = root;
         try
         {
+            AppWindow.SetIcon(ApplicationIcon.FilePath);
             var hwnd = WindowNative.GetWindowHandle(this);
             desktop = new(hwnd, DispatcherQueue);
             media = new(); media.Attach(desktop.PreviewWindow);

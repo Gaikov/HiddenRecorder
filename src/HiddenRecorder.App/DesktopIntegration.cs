@@ -9,6 +9,7 @@ public sealed class DesktopIntegration : IUserNotifier, IDisposable
     private readonly DispatcherQueue dispatcher;
     private readonly WindowProc procedure;
     private readonly nint previous;
+    private readonly ApplicationIcon trayIcon;
     private NotifyData data;
     private RecorderState? lastState;
     private bool previewVisible;
@@ -18,11 +19,12 @@ public sealed class DesktopIntegration : IUserNotifier, IDisposable
     public DesktopIntegration(nint window, DispatcherQueue dispatcher)
     {
         this.window = window; this.dispatcher = dispatcher;
+        trayIcon = ApplicationIcon.LoadTrayIcon();
         procedure = WndProc;
         previous = SetWindowLongPtrW(window, -4, Marshal.GetFunctionPointerForDelegate(procedure));
         PreviewWindow = CreateWindowExW(0, "STATIC", "", 0x50000000 | 0x04000000, 0, 0, 1, 1, window, 0, 0, 0);
         data = new NotifyData { Size = (uint)Marshal.SizeOf<NotifyData>(), Window = window, Id = 1, Flags = 1 | 2 | 4, Callback = 0x8001,
-            Icon = LoadIconW(0, 32512), Tip = "HiddenRecorder · monitoring off", Info = "", InfoTitle = "" };
+            Icon = trayIcon.DangerousGetHandle(), Tip = "HiddenRecorder · monitoring off", Info = "", InfoTitle = "" };
         Shell_NotifyIconW(0, ref data);
     }
     public void SetState(RecorderState state)
@@ -76,7 +78,7 @@ public sealed class DesktopIntegration : IUserNotifier, IDisposable
         if (visible) SetWindowPos(PreviewWindow, 0, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 | 0x0040);
         else ShowWindow(PreviewWindow, 0);
     }
-    public void Dispose() { Shell_NotifyIconW(2, ref data); SetWindowLongPtrW(window, -4, previous); DestroyWindow(PreviewWindow); }
+    public void Dispose() { Shell_NotifyIconW(2, ref data); trayIcon.Dispose(); SetWindowLongPtrW(window, -4, previous); DestroyWindow(PreviewWindow); }
     [UnmanagedFunctionPointer(CallingConvention.Winapi)] private delegate nint WindowProc(nint hwnd, uint message, nuint wParam, nint lParam);
     [StructLayout(LayoutKind.Sequential)] private struct Point { public int X, Y; }
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] private struct NotifyData
@@ -96,7 +98,6 @@ public sealed class DesktopIntegration : IUserNotifier, IDisposable
     [DllImport("user32")] private static extern bool ShowWindow(nint window, int command);
     [DllImport("user32", CharSet = CharSet.Unicode)] private static extern nint SetWindowLongPtrW(nint window, int index, nint value);
     [DllImport("user32", CharSet = CharSet.Unicode)] private static extern nint CallWindowProcW(nint previous, nint hwnd, uint message, nuint wParam, nint lParam);
-    [DllImport("user32", CharSet = CharSet.Unicode)] private static extern nint LoadIconW(nint instance, nint name);
     [DllImport("user32")] private static extern nint CreatePopupMenu();
     [DllImport("user32", CharSet = CharSet.Unicode)] private static extern bool AppendMenuW(nint menu, uint flags, nuint id, string text);
     [DllImport("user32")] private static extern uint TrackPopupMenu(nint menu, uint flags, int x, int y, int reserved, nint window, nint rect);
