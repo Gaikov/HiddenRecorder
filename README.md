@@ -61,7 +61,7 @@ You can also change the video and audio bitrates. Higher values generally increa
 
 ## Finding your recordings
 
-Completed files are stored in the selected folder. Filenames include the date and time; the current file is shown in the app window. Long recordings are split into parts of approximately one hour.
+Completed files are stored in daily subfolders of the selected folder, for example `Videos\HiddenRecorder\2026-10-31`. The app creates each folder automatically using the computer's local date when a new file starts. A file already recording at midnight stays in its original folder; the next part or recording goes into the new day's folder. Filenames include the date and time; the current file is shown in the app window. Long recordings are split into parts of approximately one hour.
 
 Pre-recording may be slightly longer than the selected duration. If a sound occurs immediately after the camera starts, the file includes only the footage already buffered.
 

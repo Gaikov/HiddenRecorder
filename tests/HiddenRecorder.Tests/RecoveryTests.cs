@@ -7,6 +7,29 @@ using Xunit;
 namespace HiddenRecorder.Tests;
 public sealed class RecoveryTests
 {
+    [Fact] public async Task FindsDailyAndLegacyRecordingsAndRecoversBesideOriginal()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "HR-test-" + Guid.NewGuid());
+        Directory.CreateDirectory(Path.Combine(root, "2026-10-31"));
+        Directory.CreateDirectory(Path.Combine(root, "2026-11-01"));
+        try
+        {
+            var legacy = Path.Combine(root, "HR_legacy_part000.partial.mp4");
+            var first = Path.Combine(root, "2026-10-31", "HR_first_part000.partial.mp4");
+            var second = Path.Combine(root, "2026-11-01", "HR_second_part000.partial.mp4");
+            var bytes = IndexedFile(false, false);
+            foreach (var path in new[] { legacy, first, second }) await File.WriteAllBytesAsync(path, bytes);
+            await File.WriteAllBytesAsync(Path.Combine(root, "2026-11-01", "HR_done_part000.mp4"), bytes);
+            await File.WriteAllBytesAsync(Path.Combine(root, "2026-11-01", "unrelated.partial.mp4"), bytes);
+            var recovery = new FragmentRecovery();
+            Assert.Equal(new[] { legacy, first, second }.OrderBy(x => x), recovery.Find(root));
+            var recovered = await recovery.RecoverAsync(second);
+            Assert.Equal(Path.GetDirectoryName(second), Path.GetDirectoryName(recovered));
+            Assert.Equal(bytes, await File.ReadAllBytesAsync(recovered));
+            Assert.Equal(bytes, await File.ReadAllBytesAsync(second));
+        }
+        finally { Directory.Delete(root, true); }
+    }
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]

@@ -91,7 +91,10 @@ public sealed class PowerGuard : IPowerGuard, IDisposable
 public sealed class FragmentRecovery
 {
     public IReadOnlyList<string> Find(string folder) => Directory.Exists(folder)
-        ? Directory.EnumerateFiles(folder, "HR_*_part*.partial.mp4").OrderBy(x => x).ToArray() : [];
+        ? Directory.EnumerateFiles(folder, "HR_*_part*.partial.mp4", new EnumerationOptions
+        {
+            RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = false
+        }).OrderBy(x => x).ToArray() : [];
     public async Task<string> RecoverAsync(string source, CancellationToken cancellationToken = default)
     {
         var target = Path.Combine(Path.GetDirectoryName(source)!, Path.GetFileNameWithoutExtension(source) + "." + Guid.NewGuid().ToString("N")[..8] + ".recovered.mp4");

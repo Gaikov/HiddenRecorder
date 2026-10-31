@@ -76,7 +76,7 @@ if __name__ == '__main__':
     parser.add_argument('folder', type=pathlib.Path)
     parser.add_argument('--require-index', action='store_true', help='Require ordinary MP4 with populated sample indexes')
     args = parser.parse_args()
-    files = sorted(p for p in args.folder.glob('*.mp4') if not p.name.endswith('.partial.mp4'))
+    files = sorted(p for p in args.folder.rglob('*.mp4') if not p.name.endswith('.partial.mp4'))
     assert files, 'No MP4 files'
     if args.require_index:
         for file in files: verify_regular_index(file)

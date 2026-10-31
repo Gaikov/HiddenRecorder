@@ -138,6 +138,27 @@ class Mp4Writer {
     std::string error;
     std::vector<std::string> open_files;
     std::vector<std::string> closed_files;
+    std::filesystem::path output_directory;
+    std::string filename_pattern;
+    static gchar* format_location(GstElement* mux, guint part_id, gpointer data) noexcept {
+        auto& self = *static_cast<Mp4Writer*>(data);
+        try {
+            SYSTEMTIME now; GetLocalTime(&now);
+            char day[16]; sprintf_s(day, "%04u-%02u-%02u", now.wYear, now.wMonth, now.wDay);
+            const auto folder = self.output_directory / day;
+            std::filesystem::create_directories(folder);
+            char name[192]; sprintf_s(name, self.filename_pattern.c_str(), part_id);
+            const auto path = (folder / name).u8string();
+            return g_strdup(reinterpret_cast<const char*>(path.c_str()));
+        } catch (const std::exception& ex) {
+            // Exceptions must not cross GStreamer's C callback boundary.
+            auto* error = g_error_new_literal(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_OPEN_WRITE, ex.what());
+            gst_element_post_message(mux, gst_message_new_error(GST_OBJECT(mux), error, "Cannot create the daily recording folder"));
+            g_error_free(error);
+            // An empty location makes filesink fail; do not fall back to a different folder.
+            return g_strdup("");
+        }
+    }
     void rename_closed() {
         for (auto it = closed_files.begin(); it != closed_files.end();) {
             auto final_name = *it;
@@ -217,22 +238,22 @@ class Mp4Writer {
         if (!closed_files.empty() && error.empty()) { error = "Cannot rename finalized MP4; file remains .partial.mp4"; events.emit(6, error); }
     }
 public:
-    Mp4Writer(EventQueue& sink, const std::string& directory, int part_seconds, uint64_t start) : events(sink), origin(start) {
+    Mp4Writer(EventQueue& sink, const std::string& directory, int part_seconds, uint64_t start) : events(sink), origin(start), output_directory(utf8_path(directory)) {
         try {
             pipeline = parse("appsrc name=video format=time is-live=false block=false max-bytes=134217728 ! h264parse ! queue max-size-buffers=0 max-size-bytes=8388608 max-size-time=0 ! mux.video appsrc name=audio format=time is-live=false block=false max-bytes=134217728 ! aacparse ! queue max-size-buffers=0 max-size-bytes=1048576 max-size-time=0 ! mux.audio_0 splitmuxsink name=mux async-finalize=true muxer-factory=mp4mux");
             video = gst_bin_get_by_name(GST_BIN(pipeline), "video"); audio = gst_bin_get_by_name(GST_BIN(pipeline), "audio");
             auto* mux = gst_bin_get_by_name(GST_BIN(pipeline), "mux");
             SYSTEMTIME now; GetLocalTime(&now); static std::atomic<unsigned> sequence{0};
-            char name[160]; sprintf_s(name, "HR_%04u%02u%02u_%02u%02u%02u_%03u_%lu_%u_part%%05d.partial.mp4", now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond, now.wMilliseconds, GetCurrentProcessId(), sequence++);
-            const auto location_u8 = (utf8_path(directory) / name).u8string();
-            std::string location(location_u8.begin(), location_u8.end());
+            char name[160]; sprintf_s(name, "HR_%04u%02u%02u_%02u%02u%02u_%03u_%lu_%u_part%%05u.partial.mp4", now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond, now.wMilliseconds, GetCurrentProcessId(), sequence++);
+            filename_pattern = name;
+            g_signal_connect(mux, "format-location", G_CALLBACK(format_location), this);
             // Regular MP4 with a crash-resilient, periodically updated sample index.
             // Reserve two alternating headers; split early if the reserved index fills.
             const guint64 reserved_duration = (guint64(part_seconds) + 5) * GST_SECOND;
             auto* properties = gst_structure_new("properties", "reserved-max-duration", G_TYPE_UINT64, reserved_duration,
                 "reserved-moov-update-period", G_TYPE_UINT64, guint64(GST_SECOND), "reserved-bytes-per-sec", G_TYPE_UINT, 1000u, nullptr);
             auto* sink_properties = gst_structure_new("properties", "buffer-mode", G_TYPE_INT, 4, nullptr);
-            g_object_set(mux, "location", location.c_str(), "max-size-time", guint64(part_seconds) * GST_SECOND, "max-size-bytes", guint64(0), "use-robust-muxing", TRUE, "muxer-properties", properties, "sink-properties", sink_properties, nullptr);
+            g_object_set(mux, "max-size-time", guint64(part_seconds) * GST_SECOND, "max-size-bytes", guint64(0), "use-robust-muxing", TRUE, "muxer-properties", properties, "sink-properties", sink_properties, nullptr);
             // Request-pad linking in gst_parse_launch already creates the first muxer/sink.
             // Factory properties affect later parts; apply them to the initial children too.
             auto* children = gst_bin_iterate_recurse(GST_BIN(mux)); GValue child = G_VALUE_INIT;

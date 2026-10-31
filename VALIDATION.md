@@ -1,5 +1,15 @@
 # Build validation — October 31, 2026
 
+## Daily recording folders
+
+- Each new MP4 part is created in an automatically created local-date `YYYY-MM-DD` subfolder of the configured output root. Finalization and recovery keep files in that folder. An open file is not forcibly split at midnight; the date is evaluated again for the next part. Existing flat recordings are preserved.
+- Release C++/WinUI builds succeeded without compiler warnings/errors; all 33 xUnit tests and the native ring-buffer checks passed. The new recovery test discovers unfinished files in two date folders and in the legacy root, ignores completed/unrelated files, and verifies recovery beside the unchanged original.
+- The actual portable native adapter recorded three 1080p/30 camera/AAC parts under `artifacts/daily-hardware/Видео % проверка/2026-10-31`. All 808 video frames decode; ordinary indexes, audio continuity, and repeated seeking pass. Maximum initial track PTS difference: 13.33 ms. Cyrillic characters, spaces, and a percent sign in the selected root do not affect file creation. The runner initially failed only while printing its final Unicode path to a CP1252 console, after successful finalization; the additional run uses UTF-8 console output.
+- `artifacts/daily-sound`: silence, pre-recording, repeated-trigger renewal, continuous sound, duration filtering, early triggering, and stopping passed. Three completed files are inside the date folder, with no unfinished files. All decode and seek successfully; decoded audio contains both trigger pulses and 5.87 seconds of pre-recording.
+- `artifacts/daily-folder-failure`: a regular file occupying the intended date-folder path produces a resource error. No MP4 is written to the root as a fallback, and the process cleans up normally.
+- The follow-up UTF-8 hardware run completed successfully with two parts and 328 decoded frames, including a short final part. Audio continuity, ordinary indexes, and seeking passed with at most 8 ms initial PTS difference. The portable folder was replaced with the tested build; packaged and tested native DLL SHA-256 hashes match. No ZIP was created.
+- The computer clock was not changed and an actual midnight boundary was not exercised. Date selection occurs in the callback for every new part; the current tests validate creation, splitting, error handling, and nested recovery during the same day.
+
 ## Reduced portable runtime
 
 - Unpacked folder reduced from 379.17 MiB to 191.26 MiB (49.56% smaller), with 717 files. Published to `artifacts/HiddenRecorder-win-x64` without a ZIP; the previous folder was retained as `artifacts/HiddenRecorder-win-x64-before-trim-20261031`. The user's active recording was finalized before replacement, and the latest saved settings were preserved.

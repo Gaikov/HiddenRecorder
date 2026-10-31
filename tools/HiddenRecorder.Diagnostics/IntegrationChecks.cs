@@ -49,7 +49,7 @@ internal static class IntegrationChecks
             while (closed.Count < count && timer.Elapsed.TotalSeconds < 3) await Task.Delay(20);
             Require(closed.Count == count, $"Expected {count} completed files, got {closed.Count}");
         }
-        void NoPartialFiles() => Require(!Directory.EnumerateFiles(output, "*.partial.mp4").Any(), "Unfinished MP4 remains after finalization");
+        void NoPartialFiles() => Require(!Directory.EnumerateFiles(output, "*.partial.mp4", SearchOption.AllDirectories).Any(), "Unfinished MP4 remains after finalization");
 
         if (hardware)
         {
@@ -81,7 +81,7 @@ internal static class IntegrationChecks
             Require(coordinator.Snapshot.PeakDb < -25, "Synthetic source did not become quiet before arming");
             await coordinator.StartAsync(options); await WaitFor(RecorderState.Armed);
             await CheckStateAfter(6, RecorderState.Armed);
-            Require(opened.IsEmpty && !Directory.EnumerateFiles(output, "*.mp4").Any(), "Silence created a media file");
+            Require(opened.IsEmpty && !Directory.EnumerateFiles(output, "*.mp4", SearchOption.AllDirectories).Any(), "Silence created a media file");
             Require(coordinator.Snapshot.BufferedSeconds >= 4.9, "Pre-roll did not fill");
             Console.WriteLine("PASS silence produces no files; five-second pre-roll filled");
 
