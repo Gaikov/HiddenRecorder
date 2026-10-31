@@ -182,7 +182,7 @@ public sealed class RecordingCoordinator : IAsyncDisposable
         try { if (finalization is not null) await finalization; else await recorder.FinishAsync(); } catch (Exception ex) { log.Write("Finalize after failure", ex); }
         try { await capture.StopAsync(); } catch (Exception ex) { log.Write("Stop after failure", ex); }
         finalization = null; pendingTrigger = null; power.SetMonitoring(false);
-        notifier.Notify("Наблюдение остановлено", error.Message);
+        notifier.Notify("Monitoring stopped", error.Message);
     }
     private void SetState(RecorderState state) { snapshot = snapshot with { State = state }; log.Write($"State: {state}"); Publish(); }
     private void Publish() => Changed?.Invoke(snapshot);

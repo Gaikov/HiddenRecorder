@@ -22,7 +22,7 @@ public sealed class DesktopIntegration : IUserNotifier, IDisposable
         previous = SetWindowLongPtrW(window, -4, Marshal.GetFunctionPointerForDelegate(procedure));
         PreviewWindow = CreateWindowExW(0, "STATIC", "", 0x50000000 | 0x04000000, 0, 0, 1, 1, window, 0, 0, 0);
         data = new NotifyData { Size = (uint)Marshal.SizeOf<NotifyData>(), Window = window, Id = 1, Flags = 1 | 2 | 4, Callback = 0x8001,
-            Icon = LoadIconW(0, 32512), Tip = "HiddenRecorder · наблюдение выключено", Info = "", InfoTitle = "" };
+            Icon = LoadIconW(0, 32512), Tip = "HiddenRecorder · monitoring off", Info = "", InfoTitle = "" };
         Shell_NotifyIconW(0, ref data);
     }
     public void SetState(RecorderState state)
@@ -30,11 +30,11 @@ public sealed class DesktopIntegration : IUserNotifier, IDisposable
         if (lastState == state) return; lastState = state;
         data.Flags = 4; data.Tip = state switch
         {
-            RecorderState.Recording => "HiddenRecorder · запись",
-            RecorderState.Armed => "HiddenRecorder · наблюдение",
-            RecorderState.Faulted => "HiddenRecorder · ошибка",
-            RecorderState.Previewing => "HiddenRecorder · предпросмотр, запись выключена",
-            RecorderState.PreviewStarting => "HiddenRecorder · подключение устройств",
+            RecorderState.Recording => "HiddenRecorder · recording",
+            RecorderState.Armed => "HiddenRecorder · monitoring",
+            RecorderState.Faulted => "HiddenRecorder · error",
+            RecorderState.Previewing => "HiddenRecorder · preview, recording off",
+            RecorderState.PreviewStarting => "HiddenRecorder · connecting devices",
             _ => "HiddenRecorder · " + state
         };
         Shell_NotifyIconW(1, ref data);
@@ -52,7 +52,7 @@ public sealed class DesktopIntegration : IUserNotifier, IDisposable
             if ((uint)lParam == 0x205)
             {
                 var menu = CreatePopupMenu();
-                AppendMenuW(menu, 0, 1, "Открыть"); AppendMenuW(menu, 0, 2, "Начать наблюдение"); AppendMenuW(menu, 0, 3, "Остановить наблюдение"); AppendMenuW(menu, 0, 4, "Выход");
+                AppendMenuW(menu, 0, 1, "Open"); AppendMenuW(menu, 0, 2, "Start monitoring"); AppendMenuW(menu, 0, 3, "Stop monitoring"); AppendMenuW(menu, 0, 4, "Exit");
                 GetCursorPos(out var point); SetForegroundWindow(window);
                 var command = TrackPopupMenu(menu, 0x100 | 0x2, point.X, point.Y, 0, window, 0); DestroyMenu(menu);
                 switch (command) { case 1: ShowRequested?.Invoke(); break; case 2: StartRequested?.Invoke(); break; case 3: StopRequested?.Invoke(); break; case 4: ExitRequested?.Invoke(); break; }

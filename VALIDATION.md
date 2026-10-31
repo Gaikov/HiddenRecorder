@@ -1,5 +1,13 @@
 # Build validation — October 31, 2026
 
+## English interface and stop delay in minutes
+
+- Translated application-owned controls, states, dialogs, tray text, accessibility labels, notifications, and error messages into English. A scan of application and native source found no remaining Cyrillic text. System-supplied device names, paths, and error details are not translated.
+- The stop-delay input now uses minutes. Existing JSON settings remain in seconds: the user's 300-second setting loads as 5 minutes. Fractional minutes are validated and rounded to whole seconds; the existing range of 1 second to 24 hours is preserved.
+- WinUI Release built without warnings/errors and all 32 xUnit tests passed. The first launch check caught a startup failure caused by the packaged Windows.Globalization language override. Removed that override, used XAML language/default cultures instead, and verified successful startup in Previewing with English labels.
+- Through the published UI, changed the delay to 10 minutes and verified 600 seconds in JSON, then to 0.5 minutes and verified 30 seconds. Restored the original 5 minutes and exited normally. These checks did not enable monitoring or create recordings. NumberBox controls now use an explicit English decimal formatter to avoid the system locale's comma separator.
+- The final published build launched successfully, reloaded 5 minutes, and displayed fractional input as `0.5` with a decimal point. The final screenshot confirms English controls, help text, status, and camera preview. Restored 5 minutes after checking. Package checks passed; no ZIP was created.
+
 ## Microphone threshold color and stop-delay setting
 
 - The microphone meter now uses red at or above the configured threshold and green below it. Both level and threshold changes update the brush; invalid values use green. The orange threshold marker remains visible. This feedback does not depend on monitoring or the duration filter.

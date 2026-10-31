@@ -12,7 +12,7 @@ using WinRT.Interop;
 namespace HiddenRecorder.App;
 public sealed class MainWindow : Window
 {
-    private readonly Grid root = new() { Padding = new Thickness(24), ColumnSpacing = 24, RowSpacing = 16, RequestedTheme = ElementTheme.Dark,
+    private readonly Grid root = new() { Language = "en-US", Padding = new Thickness(24), ColumnSpacing = 24, RowSpacing = 16, RequestedTheme = ElementTheme.Dark,
         Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 18, 22, 29)) };
     private readonly Border preview = new() { Background = new SolidColorBrush(Colors.Black), MinHeight = 220, CornerRadius = new CornerRadius(8) };
     private readonly RollingLog log = new();
@@ -26,7 +26,7 @@ public sealed class MainWindow : Window
     private bool exiting, hidden, dialogOpen;
     public MainWindow()
     {
-        Title = "HiddenRecorder — запись по звуку";
+        Title = "HiddenRecorder — sound-triggered recording";
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1180, 880));
         Content = root;
         try
@@ -53,7 +53,7 @@ public sealed class MainWindow : Window
         catch (Exception ex)
         {
             log.Write("Startup failed", ex);
-            root.Children.Add(new TextBlock { Text = "Не удалось запустить приложение\n\n" + ex.Message, TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Colors.White) });
+            root.Children.Add(new TextBlock { Text = "Could not start the application\n\n" + ex.Message, TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Colors.White) });
             desktop?.Dispose(); desktop = null;
         }
     }
@@ -67,7 +67,7 @@ public sealed class MainWindow : Window
         root.RowDefinitions.Add(new() { Height = GridLength.Auto }); root.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
         root.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) }); root.ColumnDefinitions.Add(new() { Width = new GridLength(340) });
         var heading = new StackPanel { Spacing = 6 };
-        heading.Children.Add(Text("HiddenRecorder", 30)); heading.Children.Add(Text("Камера и звук · запись при превышении порога", 14));
+        heading.Children.Add(Text("HiddenRecorder", 30)); heading.Children.Add(Text("Camera and audio · record when sound exceeds the threshold", 14));
         Grid.SetColumnSpan(heading, 2); root.Children.Add(heading);
         var left = new Grid { RowSpacing = 16 };
         foreach (var h in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto }) left.RowDefinitions.Add(new() { Height = h });
@@ -83,50 +83,51 @@ public sealed class MainWindow : Window
         var meters = new StackPanel { Spacing = 8 };
         var levels = Text(""); Bind(levels, TextBlock.TextProperty, nameof(vm.Levels)); meters.Children.Add(levels);
         var threshold = Text(""); Bind(threshold, TextBlock.TextProperty, nameof(vm.ThresholdDb));
-        var label = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 }; label.Children.Add(Text("Оранжевая отметка — порог:")); label.Children.Add(threshold); label.Children.Add(Text("dBFS")); meters.Children.Add(label);
-        meters.Children.Add(Text("Буфер предзаписи")); var progress = new ProgressBar { Minimum = 0, Maximum = 100 }; Bind(progress, ProgressBar.ValueProperty, nameof(vm.BufferPercent)); meters.Children.Add(progress);
+        var label = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 }; label.Children.Add(Text("Orange marker — threshold:")); label.Children.Add(threshold); label.Children.Add(Text("dBFS")); meters.Children.Add(label);
+        meters.Children.Add(Text("Pre-recording buffer")); var progress = new ProgressBar { Minimum = 0, Maximum = 100 }; Bind(progress, ProgressBar.ValueProperty, nameof(vm.BufferPercent)); meters.Children.Add(progress);
         var timers = Text(""); Bind(timers, TextBlock.TextProperty, nameof(vm.Timers)); meters.Children.Add(timers);
         Grid.SetRow(meters, 2); left.Children.Add(meters);
         var file = Text(""); Bind(file, TextBlock.TextProperty, nameof(vm.CurrentFile)); Grid.SetRow(file, 3); left.Children.Add(file);
         var error = Text(""); error.Foreground = new SolidColorBrush(Colors.Salmon); Bind(error, TextBlock.TextProperty, nameof(vm.Error)); Grid.SetRow(error, 4); left.Children.Add(error);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
-        var start = Button("Начать наблюдение", async (_, _) => await vm.StartAsync()); Bind(start, Control.IsEnabledProperty, nameof(vm.CanEditSettings)); actions.Children.Add(start);
-        actions.Children.Add(Button("Остановить запись", async (_, _) => await vm.StopAsync()));
-        actions.Children.Add(Button("Выход", async (_, _) => await ExitAsync())); Grid.SetRow(actions, 5); left.Children.Add(actions);
+        var start = Button("Start monitoring", async (_, _) => await vm.StartAsync()); Bind(start, Control.IsEnabledProperty, nameof(vm.CanEditSettings)); actions.Children.Add(start);
+        actions.Children.Add(Button("Stop recording", async (_, _) => await vm.StopAsync()));
+        actions.Children.Add(Button("Exit", async (_, _) => await ExitAsync())); Grid.SetRow(actions, 5); left.Children.Add(actions);
         var settings = new StackPanel { Spacing = 14 };
-        settings.Children.Add(Text("Настройки", 22));
+        settings.Children.Add(Text("Settings", 22));
         var settingsMessage = Text(""); Bind(settingsMessage, TextBlock.TextProperty, nameof(vm.SettingsMessage)); settings.Children.Add(settingsMessage);
-        settings.Children.Add(Text("MP4 · H.264 + AAC\nЧасти по 60 минут · резерв диска 1 ГиБ"));
+        settings.Children.Add(Text("MP4 · H.264 + AAC\n60-minute parts · 1 GiB free-space reserve"));
         void Number(string title, string property, double minimum, double maximum)
         {
-            var input = new NumberBox { Header = title, Minimum = minimum, Maximum = maximum, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Hidden };
+            var input = new NumberBox { Header = title, Minimum = minimum, Maximum = maximum, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Hidden,
+                NumberFormatter = new Windows.Globalization.NumberFormatting.DecimalFormatter(new[] { "en-US" }, "US") { FractionDigits = 0 } };
             Bind(input, NumberBox.ValueProperty, property, true); settings.Children.Add(input);
         }
-        Number("Задержка остановки после звука, с", nameof(vm.SilenceSeconds), 1, 86400);
-        settings.Children.Add(Text("Каждый звук, прошедший порог и фильтр, заново запускает этот таймер. 300 с = 5 мин, 600 с = 10 мин. Диапазон: 1 с — 24 ч."));
+        Number("Stop delay after sound, minutes", nameof(vm.SilenceMinutes), 1d / 60, 1440);
+        settings.Children.Add(Text("Each sound that passes the threshold and duration filter restarts this timer. Enter 5 for five minutes or 10 for ten minutes. Maximum: 24 hours."));
         ComboBox Combo(string title, object items, string property, string? member = null)
         {
             var control = new ComboBox { Header = title, ItemsSource = items, HorizontalAlignment = HorizontalAlignment.Stretch };
             if (member is not null) control.DisplayMemberPath = member;
             Bind(control, ComboBox.SelectedItemProperty, property, true); settings.Children.Add(control); return control;
         }
-        Combo("Камера", vm.Cameras, nameof(vm.SelectedCamera), "Name"); Combo("Режим видео", vm.Modes, nameof(vm.SelectedMode)); Combo("Микрофон", vm.Microphones, nameof(vm.SelectedMicrophone), "Name");
-        settings.Children.Add(Button("Обновить устройства", async (_, _) => await vm.RefreshCommand.ExecuteAsync(null)));
-        Number("Предзапись, секунды", nameof(vm.PreRollSeconds), 1, 30);
-        Number("Порог громкости, dBFS", nameof(vm.ThresholdDb), -60, 0);
-        Number("Минимальный звук, мс (0 — любой)", nameof(vm.MinimumSoundMs), 0, 1000);
-        Number("Битрейт видео, кбит/с", nameof(vm.VideoBitrateKbps), 250, 20000);
-        Combo("Битрейт AAC, кбит/с", new double[] { 64, 96, 128, 160, 192, 256, 320 }, nameof(vm.AudioBitrateKbps));
-        var channels = new ComboBox { Header = "Звук", ItemsSource = new[] { "Моно (1 канал)", "Стерео (2 канала)" }, HorizontalAlignment = HorizontalAlignment.Stretch };
+        Combo("Camera", vm.Cameras, nameof(vm.SelectedCamera), "Name"); Combo("Video mode", vm.Modes, nameof(vm.SelectedMode)); Combo("Microphone", vm.Microphones, nameof(vm.SelectedMicrophone), "Name");
+        settings.Children.Add(Button("Refresh devices", async (_, _) => await vm.RefreshCommand.ExecuteAsync(null)));
+        Number("Pre-recording, seconds", nameof(vm.PreRollSeconds), 1, 30);
+        Number("Sound threshold, dBFS", nameof(vm.ThresholdDb), -60, 0);
+        Number("Minimum sound duration, ms (0 — any)", nameof(vm.MinimumSoundMs), 0, 1000);
+        Number("Video bitrate, kbit/s", nameof(vm.VideoBitrateKbps), 250, 20000);
+        Combo("AAC bitrate, kbit/s", new double[] { 64, 96, 128, 160, 192, 256, 320 }, nameof(vm.AudioBitrateKbps));
+        var channels = new ComboBox { Header = "Audio", ItemsSource = new[] { "Mono (1 channel)", "Stereo (2 channels)" }, HorizontalAlignment = HorizontalAlignment.Stretch };
         Bind(channels, ComboBox.SelectedIndexProperty, nameof(vm.AudioChannelIndex), true); settings.Children.Add(channels);
-        var folder = new TextBox { Header = "Папка записи", TextWrapping = TextWrapping.Wrap }; Bind(folder, TextBox.TextProperty, nameof(vm.OutputDirectory), true); settings.Children.Add(folder);
-        settings.Children.Add(Button("Выбрать папку…", async (_, _) =>
+        var folder = new TextBox { Header = "Output folder", TextWrapping = TextWrapping.Wrap }; Bind(folder, TextBox.TextProperty, nameof(vm.OutputDirectory), true); settings.Children.Add(folder);
+        settings.Children.Add(Button("Choose folder…", async (_, _) =>
         {
             try { var picker = new FolderPicker(); picker.FileTypeFilter.Add("*"); InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this)); var selected = await picker.PickSingleFolderAsync(); if (selected is not null) vm.OutputDirectory = selected.Path; }
             catch (Exception ex) { vm.Error = ex.Message; }
         }));
-        settings.Children.Add(Button("Восстановить незавершённые…", async (_, _) => await OfferRecoveryAsync(true)));
-        settings.Children.Add(Text("Закрытие окна сворачивает приложение в трей. Для завершения используйте «Выход»."));
+        settings.Children.Add(Button("Recover unfinished recordings…", async (_, _) => await OfferRecoveryAsync(true)));
+        settings.Children.Add(Text("Closing the window hides the app in the system tray. Choose Exit to close it completely."));
         var settingsContainer = new UserControl { Content = settings };
         Bind(settingsContainer, Control.IsEnabledProperty, nameof(vm.CanEditSettings));
         var scroll = new ScrollViewer { Content = settingsContainer, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(0, 0, 12, 0) };
@@ -152,14 +153,14 @@ public sealed class MainWindow : Window
         dialogOpen = true; UpdatePreview();
         try
         {
-            var dialog = new ContentDialog { XamlRoot = root.XamlRoot, RequestedTheme = ElementTheme.Dark, Title = "Незавершённые записи",
-                Content = files.Count == 0 ? "Незавершённых записей нет." : $"Найдено файлов: {files.Count}. Восстановить доступную часть записей в новые файлы? Оригиналы сохранятся.",
-                PrimaryButtonText = files.Count > 0 ? "Восстановить" : "", CloseButtonText = "Закрыть" };
+            var dialog = new ContentDialog { XamlRoot = root.XamlRoot, RequestedTheme = ElementTheme.Dark, Title = "Unfinished recordings",
+                Content = files.Count == 0 ? "No unfinished recordings found." : $"Files found: {files.Count}. Recover the available recordings into new files? The originals will be preserved.",
+                PrimaryButtonText = files.Count > 0 ? "Recover" : "", CloseButtonText = "Close" };
             if (await dialog.ShowAsync() == ContentDialogResult.Primary)
             {
                 var count = 0; var errors = new List<string>();
                 foreach (var file in files) try { await recovery.RecoverAsync(file); count++; } catch (Exception ex) { errors.Add(Path.GetFileName(file) + ": " + ex.Message); }
-                viewModel.Error = $"Восстановлено: {count}. " + string.Join("\n", errors);
+                viewModel.Error = $"Recovered: {count}. " + string.Join("\n", errors);
             }
         }
         catch (Exception ex) { viewModel.Error = ex.Message; }
@@ -174,7 +175,7 @@ public sealed class MainWindow : Window
         catch (Exception ex)
         {
             log.Write("Settings save on exit failed", ex);
-            if (viewModel is not null) viewModel.SettingsMessage = "Не удалось сохранить настройки перед выходом: " + ex.Message;
+            if (viewModel is not null) viewModel.SettingsMessage = "Could not save settings before exit: " + ex.Message;
             exiting = false; layoutTimer.Start(); Show(); return;
         }
         try { if (coordinator is not null) await coordinator.DisposeAsync(); }

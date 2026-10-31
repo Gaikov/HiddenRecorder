@@ -40,6 +40,6 @@ public sealed class AudioLevelMeter : UserControl
         fill.Background = double.IsFinite(Level) && double.IsFinite(Threshold) && Level >= Threshold
             ? aboveThresholdBrush : normalBrush;
         marker.Margin = new Thickness(28, 0, 0, Math.Max(0, (scale.ActualHeight - marker.Height) * Fraction(Threshold)));
-        AutomationProperties.SetName(this, $"Микрофон {Level:0.0} dBFS, порог {Threshold:0.0} dBFS");
+        AutomationProperties.SetName(this, $"Microphone {Level:0.0} dBFS, threshold {Threshold:0.0} dBFS");
     }
 }

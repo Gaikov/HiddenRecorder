@@ -22,7 +22,7 @@ public static class MediaRuntime
             if (directory is not null) root = Path.Combine(directory.FullName, ".tools", "gstreamer");
         }
         Root = Path.GetFullPath(root);
-        if (!File.Exists(Path.Combine(Root, "bin", "gstreamer-1.0-0.dll"))) throw new FileNotFoundException("Не найдены библиотеки GStreamer. Распакуйте приложение полностью или выполните scripts/bootstrap.ps1.");
+        if (!File.Exists(Path.Combine(Root, "bin", "gstreamer-1.0-0.dll"))) throw new FileNotFoundException("GStreamer libraries are missing. Extract the entire application package.");
         AddDllDirectory(Path.Combine(Root, "bin"));
         Environment.SetEnvironmentVariable("PATH", Path.Combine(Root, "bin") + ";" + Environment.GetEnvironmentVariable("PATH"));
         Environment.SetEnvironmentVariable("GST_PLUGIN_PATH_1_0", Path.Combine(Root, "lib", "gstreamer-1.0"));
@@ -68,7 +68,7 @@ internal static unsafe class Native
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] internal static extern int hr_poll(MediaHandle handle, out Event result);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] internal static extern void hr_preview(MediaHandle handle, nuint hwnd, int width, int height);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)] internal static extern nint hr_last_error();
-    internal static void Check(int result) { if (result == 0) throw new IOException(Marshal.PtrToStringUTF8(hr_last_error()) ?? "Ошибка медиадвижка"); }
+    internal static void Check(int result) { if (result == 0) throw new IOException(Marshal.PtrToStringUTF8(hr_last_error()) ?? "Media engine error"); }
 }
 
 public sealed class GStreamerMedia : ICaptureSession, IEventRecorder, IDeviceCatalog, IPreviewSurface
@@ -87,7 +87,7 @@ public sealed class GStreamerMedia : ICaptureSession, IEventRecorder, IDeviceCat
     {
         this.testSource = testSource;
         MediaRuntime.Initialize(); handle = new();
-        if (handle.IsInvalid) throw new IOException("Не удалось инициализировать медиадвижок.");
+        if (handle.IsInvalid) throw new IOException("Could not initialize the media engine.");
         poller = Task.Run(PollAsync);
     }
     public async Task<DeviceCatalog> EnumerateAsync(CancellationToken cancellationToken = default)

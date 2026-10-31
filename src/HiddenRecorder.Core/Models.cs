@@ -28,10 +28,10 @@ public sealed record RecorderSettings
             !double.IsFinite(ThresholdDb) || ThresholdDb is < -60 or > 0 || MinimumSoundMs is < 0 or > 1000 ||
             VideoBitrateKbps is < 250 or > 20000 || AudioBitrateKbps is < 64 or > 320 ||
             AudioChannels is < 1 or > 2 || PartSeconds < 1 || ReserveBytes < 0)
-            throw new ArgumentException("Проверьте диапазоны настроек записи.");
-        if (!Path.IsPathFullyQualified(OutputDirectory)) throw new ArgumentException("Выберите абсолютный путь папки записи.");
+            throw new ArgumentException("Check the recording settings and allowed ranges.");
+        if (!Path.IsPathFullyQualified(OutputDirectory)) throw new ArgumentException("Select an absolute path for the output folder.");
         if (requireDevices && (string.IsNullOrWhiteSpace(CameraId) || string.IsNullOrWhiteSpace(MicrophoneId) || VideoMode is null))
-            throw new ArgumentException("Выберите камеру, микрофон и поддерживаемый режим видео.");
+            throw new ArgumentException("Select a camera, microphone, and supported video mode.");
     }
 }
 public abstract record MediaEvent;

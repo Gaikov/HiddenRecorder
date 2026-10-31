@@ -81,5 +81,5 @@ internal sealed record Mp4Index(ulong FirstByte, ulong EndByte)
         if (position < 0 || position > data.Length - 4) throw Invalid();
         return BinaryPrimitives.ReadUInt32BigEndian(data.Span[position..]);
     }
-    private static InvalidDataException Invalid() => new("Повреждён индекс MP4; исходный файл сохранён.");
+    private static InvalidDataException Invalid() => new("The MP4 index is invalid. The original file has been preserved.");
 }

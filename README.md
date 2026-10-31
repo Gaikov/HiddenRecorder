@@ -23,7 +23,7 @@ You need **Windows 10 22H2 or Windows 11 x64**, a camera, and a microphone. Wind
 
 Open the application folder and run **`HiddenRecorder.App.exe`**. If you received a ZIP archive, extract the entire archive first. Keep the EXE together with the other files in the folder.
 
-The current application interface is in Russian; control names below are translated into English.
+The application interface is in English.
 
 ## Your first recording
 
@@ -44,7 +44,7 @@ The save status appears below the Settings heading. Incomplete or invalid values
 | Setting | Purpose | Default |
 |---|---|---|
 | Pre-recording | Seconds before the loud sound to include in the file; range: 1–30 seconds | 5 seconds |
-| Stop delay after sound | How long to record after the last triggering sound; each new trigger restarts the full timer. Range: 1 second to 24 hours | 300 seconds (5 minutes) |
+| Stop delay after sound, minutes | How long to record after the last triggering sound; each new trigger restarts the full timer. Fractional minutes are supported, from 1 second up to 1440 minutes (24 hours) | 5 minutes |
 | Sound threshold | Trigger sensitivity: closer to −60 is more sensitive; closer to 0 requires a louder sound | −25 dBFS |
 | Minimum sound duration | How long the sound must stay above the threshold; helps ignore short clicks | 0 ms — filter disabled |
 | Video mode | Resolution and frame rate supported by the camera | Preferably 1920 × 1080 at 30 FPS |
@@ -53,7 +53,7 @@ The save status appears below the Settings heading. Incomplete or invalid values
 
 The threshold measures the microphone signal level, not physical sound pressure in the room. Use the meter: make a test sound and adjust the threshold for your environment.
 
-The stop-delay setting is at the top of the settings panel. Enter 300 for 5 minutes or 600 for 10 minutes. Sounds must also pass the minimum-duration filter, if enabled, to restart the timer. The red meter shows the current level relative to the threshold, even before a sound passes that filter or monitoring is enabled.
+The stop-delay setting is at the top of the settings panel. Enter 5 for 5 minutes, 10 for 10 minutes, or 0.5 for 30 seconds. Fractional values are rounded to the nearest second. Sounds must also pass the minimum-duration filter, if enabled, to restart the timer. The red meter shows the current level relative to the threshold, even before a sound passes that filter or monitoring is enabled.
 
 You can also change the video and audio bitrates. Higher values generally increase quality and file size. The recording format is MP4.
 

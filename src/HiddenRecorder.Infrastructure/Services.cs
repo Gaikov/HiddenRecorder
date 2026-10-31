@@ -15,7 +15,7 @@ public sealed class JsonSettingsStore : ISettingsStore
     {
         if (!File.Exists(path)) return new();
         using var input = File.OpenRead(path);
-        var settings = await JsonSerializer.DeserializeAsync<RecorderSettings>(input) ?? throw new InvalidDataException("Повреждён файл настроек.");
+        var settings = await JsonSerializer.DeserializeAsync<RecorderSettings>(input) ?? throw new InvalidDataException("The settings file is invalid.");
         settings.Validate(false); return settings;
     }
     public async Task SaveAsync(RecorderSettings settings)
@@ -32,8 +32,8 @@ public sealed class StorageGuard : IStorageGuard
     public void Check(RecorderSettings settings, bool probeWrite)
     {
         if (probeWrite) Directory.CreateDirectory(settings.OutputDirectory);
-        if (!GetDiskFreeSpaceEx(settings.OutputDirectory, out var available, out _, out _)) throw new IOException("Не удалось проверить свободное место в папке записи.");
-        if (available < (ulong)settings.ReserveBytes) throw new IOException("Недостаточно свободного места. Старые записи сохранены.");
+        if (!GetDiskFreeSpaceEx(settings.OutputDirectory, out var available, out _, out _)) throw new IOException("Could not check free space in the output folder.");
+        if (available < (ulong)settings.ReserveBytes) throw new IOException("Not enough free disk space. Existing recordings have been preserved.");
         if (probeWrite)
         {
             using var probe = new FileStream(Path.Combine(settings.OutputDirectory, ".write-test-" + Guid.NewGuid().ToString("N")), FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose);
@@ -72,10 +72,10 @@ public sealed class PowerGuard : IPowerGuard, IDisposable
     {
         if (enabled && request == 0)
         {
-            var reason = new ReasonContext { Version = 0, Flags = 1, Reason = "HiddenRecorder: наблюдение камеры и микрофона" };
+            var reason = new ReasonContext { Version = 0, Flags = 1, Reason = "HiddenRecorder: camera and microphone monitoring" };
             request = PowerCreateRequest(ref reason);
-            if (request == -1) { request = 0; throw new IOException("Не удалось запретить автоматический сон."); }
-            if (!PowerSetRequest(request, 1)) { CloseHandle(request); request = 0; throw new IOException("Не удалось включить защиту от сна."); }
+            if (request == -1) { request = 0; throw new IOException("Could not prevent automatic sleep."); }
+            if (!PowerSetRequest(request, 1)) { CloseHandle(request); request = 0; throw new IOException("Could not enable sleep prevention."); }
         }
         else if (!enabled && request != 0) { PowerClearRequest(request, 1); CloseHandle(request); request = 0; }
     }
@@ -117,7 +117,7 @@ public sealed class FragmentRecovery
             if (size < (ulong)headerLength || size > (ulong)(input.Length - start)) break;
             if (type == "moov")
             {
-                if (size > 32 * 1024 * 1024) throw new InvalidDataException("Индекс MP4 превышает допустимый размер.");
+                if (size > 32 * 1024 * 1024) throw new InvalidDataException("The MP4 index exceeds the supported size.");
                 var payload = new byte[(int)size - headerLength];
                 await input.ReadExactlyAsync(payload, cancellationToken);
                 index = Mp4Index.Read(payload);
@@ -130,13 +130,13 @@ public sealed class FragmentRecovery
                 if (index is not null)
                 {
                     if (index.FirstByte < (ulong)(start + headerLength) || index.EndByte > (ulong)input.Position)
-                        throw new InvalidDataException("Данные MP4, на которые ссылается индекс, не дописаны. Исходный файл сохранён.");
+                        throw new InvalidDataException("MP4 data referenced by the index is incomplete. The original file has been preserved.");
                     validEnd = input.Position;
                 }
                 else if (pendingMoof && haveMoov) { validEnd = input.Position; pendingMoof = false; }
             }
         }
-        if (validEnd == 0) throw new InvalidDataException("В файле нет сохранённого индекса или полного MP4-фрагмента для восстановления.");
+        if (validEnd == 0) throw new InvalidDataException("The file has no saved index or complete MP4 fragment to recover.");
         input.Position = 0;
         await using var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, FileOptions.Asynchronous | FileOptions.WriteThrough);
         var buffer = new byte[65536];
