@@ -1,66 +1,66 @@
-# Проверки сборки — 31 октября 2026
+# Build validation — October 31, 2026
 
-## Совместимость перемотки MP4
+## MP4 seeking compatibility
 
-- После сообщения о зависании изображения при перемотке изменён режим `mp4mux`: обычный MP4 с полными индексами и их обновлением раз в секунду через robust muxing. Кодеки остаются H.264 + AAC. Резерв индекса и обновление применяются ко всем частям, включая первую.
-- Точный сбой в проигрывателе пользователя пока не воспроизведён: две исходные записи проходят программное декодирование и SourceReader Windows. Название проигрывателя не уточнено. Поэтому успешные тесты ниже подтверждают новый формат и работу декодеров, но не считаются проверкой исчезновения сбоя в конкретном проигрывателе.
-- Усилена проверка перемотки: переходы вперёд/назад на 75%, 25%, 60%, 10%, 0%, с непрерывным декодированием кадров после целевой отметки. Добавлен независимый `mf-seek-check` для Windows Media Foundation. Флаг `verify_media.py --require-index` проверяет наличие непустых обычных индексов обеих дорожек и отсутствие фрагментированного режима.
-- Синтетическая запись `artifacts/seek-robust-parts`: три части, 300 + 300 + 209 кадров. Полное декодирование H.264/AAC, непрерывность временных меток, обычные индексы и обе проверки перемотки прошли. Начальная разница PTS дорожек ≤ 14 мс.
-- Настоящая USB-камера 1080p/30 и микрофон, `artifacts/seek-robust-hardware`: три части, 300 + 300 + 29 кадров. Полное декодирование, непрерывный звук, обе проверки перемотки и индексы прошли, включая короткую последнюю часть. Начальная разница PTS ≤ 13,34 мс. Содержимое записи не анализировалось.
-- Два аварийных завершения процесса на 18-й и 11,5-й секунде: восстановлены 454 и 303 кадра из сохранённых индексов (`artifacts/seek-robust-crash` и `seek-robust-crash-second`). Звук декодируется без внутренних разрывов; перемотка PyAV и Windows проходит. SHA-256 исходников до/после восстановления совпадает. Это проверка сбоя процесса, не отключения питания.
-- Для двух исходных пользовательских записей созданы соседние копии `.seekable.mp4` через remux без перекодирования. Хеши и количество сжатых аудио/видеопакетов совпадают с оригиналами; Windows SourceReader проходит повторную перемотку. Оригиналы не изменены, копии не входят в Git или поставку.
-- C++ и WinUI Release собраны; 32 xUnit-теста и нативный тест кольца прошли. Новые тесты восстановления проверяют открытый/закрытый `mdat`, 64-битные смещения, сохранность оригинала, отказ при неполных данных и пустом индексе; совместимость с прежним fMP4 сохранена.
-- Готовая папка обновлена через `package.ps1 -SkipBuild -NoArchive`; проверка GUI EXE, PRI и зависимостей прошла. SHA-256 нативной DLL в поставке совпадает с проверенной Release-сборкой. Два аварийных прогона охватили оба положения активного заголовка `moov`.
+- Following a report of frozen video after seeking, `mp4mux` was changed to ordinary MP4 with full indexes updated once per second through robust muxing. Codecs remain H.264 + AAC. Index reservation and updates apply to every part, including the first.
+- The user identified VLC as the affected player. The exact playback failure has not yet been reproduced: both original recordings pass software decoding and Windows SourceReader checks. The tests below validate the new format and decoders; they do not confirm that the failure is resolved in VLC.
+- Seeking checks were strengthened: forward/backward jumps to 75%, 25%, 60%, 10%, and 0%, with continuous frame decoding beyond each target. An independent `mf-seek-check` was added for Windows Media Foundation. `verify_media.py --require-index` checks for populated ordinary indexes in both tracks and the absence of fragmented mode.
+- Synthetic recording in `artifacts/seek-robust-parts`: three parts, 300 + 300 + 209 frames. Full H.264/AAC decoding, timestamp continuity, ordinary indexes, and both seeking checks passed. Initial track PTS difference was ≤ 14 ms.
+- Real USB camera at 1080p/30 and microphone, `artifacts/seek-robust-hardware`: three parts, 300 + 300 + 29 frames. Full decoding, continuous audio, both seeking checks, and index checks passed, including the short final part. Initial PTS difference was ≤ 13.34 ms. Recording content was not analyzed.
+- Two process crashes at 18 and 11.5 seconds: 454 and 303 frames were recovered from saved indexes (`artifacts/seek-robust-crash` and `seek-robust-crash-second`). Audio decodes without internal gaps; PyAV and Windows seeking checks pass. Source SHA-256 hashes match before and after recovery. These are process-crash tests, not power-loss tests.
+- Two original user recordings were remuxed into neighboring `.seekable.mp4` copies without re-encoding. Compressed audio/video packet hashes and counts match the originals; Windows SourceReader passes repeated seeking. Originals were not changed, and the copies are not included in Git or the application package.
+- C++ and WinUI Release builds succeeded; 32 xUnit tests and the native ring-buffer test passed. New recovery tests cover open/closed `mdat`, 64-bit offsets, preservation of the original, rejection of incomplete data and empty indexes, and continued support for older fMP4 files.
+- The published folder was updated with `package.ps1 -SkipBuild -NoArchive`; GUI EXE, PRI, and dependency checks passed. The packaged native DLL's SHA-256 matches the tested Release build. The two crash runs exercised both active `moov` header positions.
 
-## Автосохранение настроек
+## Automatic settings saving
 
-- Добавлено сохранение корректных изменений через 500 мс без начала наблюдения. Перед выходом ожидается завершение записи последнего снимка. Ошибки сохранения отображаются отдельно от ошибок медиадвижка; при ошибке записи настроек выход не завершается молча.
-- 27 xUnit-тестов прошли. Шесть новых тестов проверяют объединение быстрых изменений, сохранение перед выходом без ожидания таймера, последовательность записей при медленном хранилище, защиту последней корректной настройки от неверного ввода, ошибку и повтор сохранения, чтение сохранённого JSON новым экземпляром хранилища без запуска захвата.
-- Тест JSON использует отдельную временную папку. Настройки пользователя при тестировании не изменяются. Проверка поведения через реальные элементы WinUI не включена в эти результаты.
-- WinUI Release собран без предупреждений и ошибок. Переносимая папка обновлена командой `package.ps1 -SkipBuild -NoArchive`; проверка GUI EXE, ресурсов WinUI и библиотек поставки прошла.
+- Valid changes are saved after 500 ms without starting monitoring. Exit waits for the latest snapshot to be written. Save errors are displayed separately from media-engine errors; a settings write failure does not silently close the app.
+- 27 xUnit tests passed. Six new tests cover coalescing rapid changes, saving on exit without waiting for the timer, write ordering with slow storage, protecting the last valid settings from invalid input, save failure and retry, and reading saved JSON through a new store instance without starting capture.
+- The JSON test uses a separate temporary folder. Tests do not change user settings. These results do not include interaction with actual WinUI controls.
+- WinUI Release built without warnings or errors. The portable folder was updated with `package.ps1 -SkipBuild -NoArchive`; GUI EXE, WinUI resource, and packaged library checks passed.
 
-## Исправления интерфейса и постоянного предпросмотра
+## UI fixes and continuous preview
 
-- Убраны всплывающие стрелки NumberBox. Каналы выбираются как «Моно / Стерео», AAC — из поддерживаемых битрейтов.
-- Вместо Slider добавлена вертикальная заполняющаяся шкала −90…0 dBFS с оранжевым порогом и отдельными показаниями peak/RMS.
-- Добавлены состояния PreviewStarting/Previewing. При открытии запускаются выбранные камера и микрофон; громкость/буфер обновляются, звук не создаёт файлы до команды наблюдения. Остановка записи сохраняет живой предпросмотр. Изменение параметров захвата перезапускает предпросмотр; выход и сон освобождают устройства.
-- Исправлен порядок дочерних окон: HWND предпросмотра поднимается над соседним XAML HWND без активации. Убраны постоянные MoveWindow/ShowWindow при неизменном расположении.
-- 21 xUnit-тест прошёл, сборка WinUI — без предупреждений. Добавлены проверки отсутствия записи в предпросмотре, независимости предпросмотра от диска, включения наблюдения без повторного открытия устройств, сохранения микрофона после остановки, смены профиля и остановки во время финализации.
-- Интеграционный сценарий GStreamer `artifacts/verification-live-preview-final` прошёл: громкий звук в предпросмотре обновляет уровень без файлов; после включения наблюдения работает детектор; после остановки записи уровень продолжает обновляться. Три MP4 полностью декодированы и проверены на перемотку, оба импульса и 5,85 секунды предзаписи присутствуют в первом файле.
-- Готовая папка обновлена, приложение запущено. Дерево интерфейса подтверждает автоматический Previewing, дочерний Direct3D11 renderer, живой уровень микрофона и заполнение буфера. Скриншот инструмента снова показывает фон рабочего стола вместо окна, поэтому видимый видеокадр и расположение элементов визуально не подтверждены.
+- Removed NumberBox popup arrows. Audio channels are selected as Mono / Stereo, and AAC bitrate is selected from supported values.
+- Replaced the Slider with a vertical filling meter from −90 to 0 dBFS, an orange threshold marker, and separate peak/RMS readings.
+- Added PreviewStarting/Previewing states. Opening the app starts the selected camera and microphone; levels and buffering update, but sound does not create files until monitoring is enabled. Stopping recording keeps the live preview. Capture setting changes restart the preview; exit and sleep release devices.
+- Fixed child-window ordering: the preview HWND is raised above the neighboring XAML HWND without activation. Removed repeated MoveWindow/ShowWindow calls when the layout has not changed.
+- 21 xUnit tests passed, and WinUI built without warnings. Added checks for no recording during preview, preview independence from storage, arming without reopening devices, keeping the microphone active after stopping, profile changes, and stopping during finalization.
+- The GStreamer integration scenario in `artifacts/verification-live-preview-final` passed: loud sound during preview updates the level without creating files; the detector works after arming; levels continue updating after recording stops. Three MP4 files were fully decoded and checked for seeking; both pulses and 5.85 seconds of pre-recording are present in the first file.
+- The published folder was updated and the app launched. The UI tree confirms automatic Previewing, a child Direct3D11 renderer, live microphone levels, and buffer filling. The tool screenshot again shows the desktop background instead of the window, so the visible video frame and control layout have not been visually confirmed.
 
-## Повторная проверка по запросу «проверь сам»
+## Follow-up verification requested by the user
 
-- Найден и исправлен дефект ранней записи с настоящего микрофона: AAC-инициализация блокировала WASAPI, источник сообщал `Can't record audio fast enough`, в файле терялись около 530 мс звука. Перед преобразованием/кодированием добавлена отдельная очередь до 2 секунд / 4 МиБ. Предупреждения источника о потере сэмплов теперь превращаются в ошибку наблюдения, а не игнорируются.
-- После исправления выполнены два последовательных сценария с USB2.0 FHD UVC WebCam, 1080p/30 и настоящим микрофоном. При 0 dBFS файлы не создавались; при −60 dBFS звук запускал запись через `RecordingCoordinator`. Ручная остановка закрывала файл и освобождала устройства. Оба MP4 полностью декодированы: 209 и 203 кадра, непрерывная AAC-дорожка, перемотка работает, начальная разница PTS 0 мс. Результаты: `artifacts/verification-hardware-fixed-1` и `verification-hardware-fixed-2`.
-- Сценарий с реальным GStreamer и управляемыми синтетическими звуками прошёл: тишина, заполнение буфера, одиночный импульс, продление вторым импульсом, непрерывный звук дольше таймера, фильтр 500 мс, раннее срабатывание после повторного запуска, ручная остановка. После второго импульса файл закрыт за 3,11 секунды при настройке 3 секунды. Все три файла декодируются. В первом файле по декодированному звуку найдены оба импульса и 5,12 секунды предзаписи. Результаты: `artifacts/verification-sound-final`.
-- Новый синтетический прогон 120 секунд: 12 частей, 3569 декодированных видеокадров, непрерывные временные метки внутри частей, AAC и перемотка проверены. Начало записи с предысторией приходится примерно на первую секунду потока, поэтому итоговая длительность около 119 секунд. После прогрева private bytes удерживались около 261 МиБ, дескрипторы — около 2320; здесь плагины сканировались внутри процесса. Это короткий прогон, а не подтверждение восьмичасовой стабильности. Результаты: `artifacts/verification-soak-fixed/decoded.json` и `resources.jsonl`.
-- Аварийное завершение на 18-й секунде: восстановлено 450 видеокадров (15 секунд) и полные аудиофрагменты. Декодирование и перемотка прошли; SHA-256 исходного `.partial.mp4` до/после восстановления совпадает. Результаты: `artifacts/verification-crash-fixed`.
-- Повторный запуск WinUI создаёт окно и дерево доступности с командами/настройками; падение на ресурсах больше не воспроизвелось. Визуальная проверка всё ещё **не пройдена**: после повторного выбора окна инструмент возвращает `failed to activate captured window`, а снимок содержит фон рабочего стола. Поэтому предпросмотр, нажатия кнопок, трей, DPI и диалоги не объявляются проверенными.
-- Настройки пользователя не менялись. Тестовый экземпляр интерфейса закрыт перед обновлением готовой папки. Полные приёмочные проверки из раздела ниже остаются обязательными.
+- Found and fixed an early-recording defect with the real microphone: AAC initialization blocked WASAPI, the source reported `Can't record audio fast enough`, and approximately 530 ms of audio was lost. A separate queue of up to 2 seconds / 4 MiB was added before conversion/encoding. Source warnings about lost samples now become monitoring errors instead of being ignored.
+- After the fix, two consecutive scenarios ran with the USB2.0 FHD UVC WebCam at 1080p/30 and a real microphone. No files were created at 0 dBFS; at −60 dBFS, sound triggered recording through `RecordingCoordinator`. Manual stop closed the file and released devices. Both MP4 files were fully decoded: 209 and 203 frames, continuous AAC, seeking passed, and initial PTS difference was 0 ms. Results: `artifacts/verification-hardware-fixed-1` and `verification-hardware-fixed-2`.
+- The scenario using real GStreamer and controlled synthetic sounds passed: silence, buffer filling, a single pulse, extension by a second pulse, continuous sound longer than the timer, a 500 ms filter, early triggering after restart, and manual stop. The file closed 3.11 seconds after the second pulse with a 3-second setting. All three files decode. Both pulses and 5.12 seconds of pre-recording were found in decoded audio from the first file. Results: `artifacts/verification-sound-final`.
+- A new 120-second synthetic run produced 12 parts and 3569 decoded video frames, with continuous timestamps within parts; AAC and seeking were checked. Recording with pre-roll starts around the first second of the stream, so the total duration is approximately 119 seconds. After warmup, private bytes stayed around 261 MiB and handles around 2320; plugins were scanned in-process in this run. This is a short run, not evidence of eight-hour stability. Results: `artifacts/verification-soak-fixed/decoded.json` and `resources.jsonl`.
+- Crash at 18 seconds: recovered 450 video frames (15 seconds) and complete audio fragments. Decoding and seeking passed; the original `.partial.mp4` SHA-256 matches before and after recovery. Results: `artifacts/verification-crash-fixed`.
+- Relaunching WinUI creates a window and accessibility tree with commands/settings; the resource-related crash no longer reproduced. Visual validation is still **incomplete**: after selecting the window again, the tool returns `failed to activate captured window`, and the image contains the desktop background. Preview, button interaction, tray behavior, DPI, and dialogs are therefore not claimed as verified.
+- User settings were not changed. The test UI instance was closed before updating the published folder. The full acceptance checks below remain required.
 
-## Выполнено
+## Earlier completed checks
 
-- Исправление запуска: обнаружено отсутствие `HiddenRecorder.App.pri` в результате `dotnet publish`. Добавлены явное включение PRI в публикацию и проверка состава поставки. Исправленный EXE создаёт окно и загружает настройки; предыдущее падение на теме `ProgressBar` устранено. Отключён отдельный консольный сканер GStreamer. Полная визуальная проверка по-прежнему ограничена ошибкой активации окна в инструменте автоматизации.
+- Startup fix: `HiddenRecorder.App.pri` was missing from `dotnet publish` output. Added explicit PRI inclusion and a package-content check. The corrected EXE creates a window and loads settings; the previous `ProgressBar` theme crash was fixed. The separate GStreamer console scanner was disabled. Full visual validation remains limited by the automation tool's window-activation failure.
 
-- C++ Release / MSVC x64 и C# / WinUI 3 Release собраны. Последняя сборка C# прошла без предупреждений.
-- 16 xUnit-тестов: тишина, одиночный импульс, непрерывный звук, продление таймера, граничное срабатывание, звук во время финализации, отключение устройства, нехватка диска, ручная остановка, изменение настенных часов, фильтр длительности и восстановление неполного MP4.
-- Нативный тест кольца: предыдущий ключевой кадр, аудио и видео без повторов в снимке, ранний запуск, история события во время финализации, очистка.
-- Синтетический прогон 60 секунд: шесть частей по 10 секунд; декодированы 1800 видеокадров и обе дорожки всех файлов, проверены ключевые кадры, последовательность временных меток и перемотка. Начальная разница PTS аудио/видео ≤ 17 мс.
-- В этом коротком прогоне private bytes стабилизировались около 57 МБ; количество дескрипторов после прогрева не росло. Это не результат восьмичасового теста.
-- Настоящая USB-камера: 1920×1080 / 30 FPS, аппаратный H.264, микрофон через C# P/Invoke-адаптер. Две части, 511 видеокадров; видео и AAC декодируются, начальная разница PTS < 1 мс. Содержимое записи не анализировалось.
-- Принудительное завершение процесса на 18-й секунде: восстановлены 16 секунд видео (480 кадров) и завершённые аудиофрагменты; восстановленный файл декодируется и поддерживает перемотку. Оригинал сохраняется.
-- Собран переносимый ZIP с .NET, Windows App SDK, GStreamer, VC runtime и лицензиями.
-- Комплект GStreamer именно из папки поставки проверен тремя последовательными запусками реальной камеры через C#-адаптер. Все три записи завершены и декодированы, перемотка работает. Добавлена нормализация нестабильных стартовых меток камеры и сегментного смещения аппаратного кодировщика.
-- WinUI запускается; дерево доступности содержит настройки, индикаторы и команды. Инструмент визуальной проверки дважды вернул `failed to activate captured window`; полноценная визуальная приёмка не завершена.
+- C++ Release / MSVC x64 and C# / WinUI 3 Release built successfully. The latest C# build at that stage had no warnings.
+- 16 xUnit tests covered silence, a single pulse, continuous sound, timer extension, a trigger at the stop boundary, sound during finalization, device disconnection, insufficient disk space, manual stop, wall-clock changes, the duration filter, and incomplete MP4 recovery.
+- Native ring-buffer test: preceding keyframe, no duplicate audio/video in the snapshot, early start, event history during finalization, and cleanup.
+- A 60-second synthetic run produced six 10-second parts. All 1800 video frames and both tracks in every file were decoded; keyframes, timestamp sequence, and seeking were checked. Initial audio/video PTS difference was ≤ 17 ms.
+- In this short run, private bytes stabilized around 57 MB and handle counts did not grow after warmup. This is not an eight-hour test result.
+- Real USB camera: 1920 × 1080 at 30 FPS, hardware H.264, microphone through the C# P/Invoke adapter. Two parts, 511 video frames; video and AAC decode, with an initial PTS difference < 1 ms. Recording content was not analyzed.
+- Forced process termination at 18 seconds: 16 seconds of video (480 frames) and complete audio fragments were recovered. The recovered file decodes and supports seeking. The original is preserved.
+- Built a portable ZIP with .NET, Windows App SDK, GStreamer, the VC runtime, and licenses.
+- The GStreamer bundle from the published folder was tested in three consecutive real-camera runs through the C# adapter. All three recordings were completed and decoded; seeking passed. Added normalization of unstable camera startup timestamps and the hardware encoder's segment offset.
+- WinUI launches; the accessibility tree contains settings, indicators, and commands. The visual-check tool returned `failed to activate captured window` twice; full visual acceptance is incomplete.
 
-## Ещё требуется перед стабильным релизом
+## Still required before a stable release
 
-- Восьмичасовой прогон с контролем памяти, дескрипторов, длительной синхронизации и часовых границ. Команда приведена в README.
-- Установка/запуск распакованного ZIP на чистых Windows 10 и 11 без SDK и системного GStreamer. Проверка на текущем компьютере не заменяет чистую VM.
-- Ручная проверка предпросмотра, DPI, ресайза, трея, восстановления окна, сна/пробуждения и выбора папки.
-- Воспроизведение и перемотка именно в Windows Media Player и VLC. PyAV подтверждает декодируемость, но не заменяет эти два приложения.
-- Физическое отключение питания или управляемый сбой VM/диска; медленный/съёмный диск и реальное заполнение диска.
-- Анализ синхронизации по физическим аудио/видеомаркерам. Проверенные PTS показывают согласованность временной шкалы, но не измеряют задержки сенсора и микрофона.
+- An eight-hour run tracking memory, handles, long-term synchronization, and hourly boundaries. The command is in [DEVELOPMENT.md](DEVELOPMENT.md).
+- Install/run the extracted ZIP on clean Windows 10 and 11 systems without an SDK or system-installed GStreamer. Testing on the current computer does not replace a clean VM.
+- Manual checks of preview, DPI, resizing, tray behavior, window restoration, sleep/wake, and folder selection.
+- Playback and seeking in Windows Media Player and VLC themselves. PyAV confirms decodability but does not replace those applications.
+- Physical power loss or a controlled VM/storage failure; slow/removable storage and actual disk exhaustion.
+- Synchronization analysis using physical audio/video markers. Validated PTS shows timeline consistency but does not measure sensor and microphone latency.
 
-Медиа из `artifacts/hardware*` — локальные тестовые записи реальных устройств. Они не входят в поставляемый ZIP. Синтетические и аварийные тестовые файлы также не входят в архив приложения.
+Media under `artifacts/hardware*` consists of local test recordings from real devices. It is not included in the distributed ZIP. Synthetic and crash-test files are also excluded from the application archive.

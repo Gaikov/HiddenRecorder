@@ -1,54 +1,55 @@
-# Разработка HiddenRecorder
+# HiddenRecorder development
 
-Документ для разработчиков и агентов, работающих с исходным кодом. Пользовательская инструкция находится в [README.md](README.md), результаты выполненных проверок и оставшаяся приёмка — в [VALIDATION.md](VALIDATION.md).
+This document is for developers and agents working with the source code. User instructions are in [README.md](README.md); completed checks and outstanding acceptance work are in [VALIDATION.md](VALIDATION.md).
 
-## Стек и организация проекта
+## Stack and project layout
 
-C# / .NET 10, WinUI 3, MVVM, CommunityToolkit.Mvvm, GStreamer и нативный адаптер C++ с C ABI. Прикладные правила тестируются xUnit. Целевые системы: Windows 10 22H2 и Windows 11 x64.
+C# / .NET 10, WinUI 3, MVVM, CommunityToolkit.Mvvm, GStreamer, and a native C++ adapter with a C ABI. Application rules are tested with xUnit. Target systems: Windows 10 22H2 and Windows 11 x64.
 
-| Каталог | Содержимое |
+| Directory | Contents |
 |---|---|
-| `src/HiddenRecorder.Core` | Модели, контракты, детектор звука, координатор состояний |
-| `src/HiddenRecorder.Infrastructure` | P/Invoke, настройки, диск, журнал, управление сном, восстановление файлов |
-| `src/HiddenRecorder.App` | Окно WinUI, ViewModel, индикатор громкости, HWND предпросмотра и трей |
-| `native` | GStreamer-конвейеры, кольцевой буфер и MP4-писатель, нативные тесты |
-| `tests/HiddenRecorder.Tests` | Тесты правил записи и восстановления |
-| `tools/HiddenRecorder.Diagnostics` | Диагностические и интеграционные сценарии |
-| `scripts` | Подготовка зависимостей, сборка, поставка и проверка медиа |
+| `src/HiddenRecorder.Core` | Models, contracts, sound detector, state coordinator |
+| `src/HiddenRecorder.Infrastructure` | P/Invoke, settings, storage, logging, power management, file recovery |
+| `src/HiddenRecorder.App` | WinUI window, ViewModel, level meter, preview HWND, system tray |
+| `native` | GStreamer pipelines, ring buffer, MP4 writer, native tests |
+| `tests/HiddenRecorder.Tests` | Recording policy and recovery tests |
+| `tools/HiddenRecorder.Diagnostics` | Diagnostic and integration scenarios |
+| `scripts` | Dependency setup, build, packaging, and media validation |
 
-## Правила сопровождения
+## Maintenance rules
 
-- README описывает возможности и работу с приложением для пользователя. Команды сборки, внутренние алгоритмы, зависимости и технические ограничения ведутся здесь.
-- При изменении архитектуры, жизненного цикла или команд обновляйте этот документ. Результаты реальных прогонов и непроверенные сценарии фиксируйте в VALIDATION.md; успешную сборку не считайте проверкой интерфейса или записи.
-- Сохраняйте направление зависимостей к Core, композицию и небольшие интерфейсы на границах подсистем. Не передавайте GStreamer-типы в прикладную логику и ViewModel.
-- Не включайте в Git `.tools`, `build`, `artifacts`, `bin`, `obj`, локальные настройки, секреты и тестовые записи камеры/микрофона. Lock-файлы зависимостей входят в репозиторий.
-- При публикации уже запущенный EXE может удерживать DLL. Завершите приложение штатно, сохранив текущую запись, прежде чем обновлять готовую папку.
+- Keep all repository documentation in English, including README files and agent instructions.
+- README describes features and app usage for users. Keep build commands, internal algorithms, dependencies, and technical limitations here.
+- Update this document when the architecture, lifecycle, or commands change. Record actual runs and untested scenarios in VALIDATION.md; a successful build is not proof that the UI or recording works.
+- Keep dependencies directed toward Core, use composition and small interfaces at subsystem boundaries. Do not expose GStreamer types to application logic or ViewModels.
+- Do not commit `.tools`, `build`, `artifacts`, `bin`, `obj`, local settings, secrets, or test camera/microphone recordings. Dependency lock files belong in the repository.
+- A running EXE may hold DLLs open during publishing. Exit the app normally and finish any active recording before updating the published folder.
 
-## Жизненный цикл и настройки
+## Lifecycle and settings
 
-При открытии приложения ViewModel загружает настройки, перечисляет устройства и вызывает `StartPreviewAsync`. Состояния `PreviewStarting → Previewing` включают захват, уровни и буфер без записи на диск и без проверки свободного места. Изменение параметров захвата применяет новый профиль после задержки 600 мс.
+When the app opens, the ViewModel loads settings, enumerates devices, and calls `StartPreviewAsync`. The `PreviewStarting → Previewing` states enable capture, levels, and buffering without writing recordings or checking free disk space. Changes to capture settings apply a new profile after a 600 ms delay.
 
-Команда наблюдения переводит готовый предпросмотр в `Armed`; если параметры захвата совпадают, устройства повторно не открываются. Дальнейшая цепочка: `Armed → Recording → Finalizing → Armed`. `DisarmAsync` завершает запись и возвращает `Previewing`, сохраняя захват. `StopAsync` освобождает устройства и переводит в `Idle`; он используется при выходе и приостановке системы. Ошибки переводят сессию в `Faulted`. Дополнительно используется переходное состояние `Stopping`.
+The monitoring command moves a ready preview to `Armed`; devices are not reopened if the capture settings match. The subsequent sequence is `Armed → Recording → Finalizing → Armed`. `DisarmAsync` finishes recording and returns to `Previewing`, keeping capture active. `StopAsync` releases devices and moves to `Idle`; it is used on exit and system suspend. Errors move the session to `Faulted`. There is also a transitional `Stopping` state.
 
-Параметры записи меняются вне наблюдения. Настройки сохраняются атомарно в `%LocalAppData%/HiddenRecorder/settings.json`; журнал `app.log` находится рядом, ротация выполняется после 2 МиБ с четырьмя резервными файлами. Дефолты задаются в `RecorderSettings`: предзапись 5 с, тишина 300 с, порог −25 dBFS, фильтр 0 мс, H.264 6000 кбит/с, AAC 128 кбит/с / 48 кГц / моно. Предпочтительный режим камеры — 1080p/30, выбираемый из её доступных режимов.
+Recording settings can be changed outside monitoring. Settings are saved atomically to `%LocalAppData%/HiddenRecorder/settings.json`; `app.log` is stored alongside it and rotates at 2 MiB with four backup files. Defaults are defined in `RecorderSettings`: 5 s pre-recording, 300 s silence timeout, −25 dBFS threshold, 0 ms filter, H.264 at 6000 kbit/s, AAC at 128 kbit/s / 48 kHz / mono. The preferred camera mode is 1080p/30, selected from its available modes.
 
-`MainViewModel` отслеживает изменения всех пользовательских параметров и передаёт проверенный снимок в `SettingsAutoSaver` (Core). Он объединяет изменения за 500 мс через `TimeProvider`, последовательно пишет снимки через `ISettingsStore` и не допускает перезаписи новых параметров более старой записью. Начальная загрузка и временное очищение списков при обновлении устройств не запускают автосохранение. Сохранение не требует камеры, микрофона или старта наблюдения; идентификаторы отсутствующих устройств сохраняются. Некорректный ввод оставляет последний корректный снимок, результат и ошибки показываются отдельным статусом настроек.
+`MainViewModel` tracks changes to all user settings and passes a validated snapshot to `SettingsAutoSaver` (Core). It coalesces changes over 500 ms using `TimeProvider`, writes snapshots sequentially through `ISettingsStore`, and prevents an older write from overwriting newer settings. Initial loading and temporarily clearing lists during device refresh do not trigger autosaving. Saving requires neither devices nor monitoring; identifiers for unavailable devices are preserved. Invalid input leaves the last valid snapshot intact, and a separate settings status displays results and errors.
 
-Перед началом наблюдения и при приостановке выполняется `FlushAsync`. Выход дожидается сброса последних изменений и освобождает таймер автосохранения; если запись настроек на диск не удалась, окно остаётся открытым с ошибкой. Двусторонние привязки используют `PropertyChanged`, в том числе для пути папки. `JsonSettingsStore` допускает явный путь файла для изолированных тестов, не затрагивающих пользовательские настройки.
+`FlushAsync` runs before monitoring starts and on suspend. Exit waits for the latest changes to be flushed and disposes the autosave timer; if saving fails, the window stays open with an error. Two-way bindings use `PropertyChanged`, including the output folder path. `JsonSettingsStore` accepts an explicit file path for isolated tests that do not touch user settings.
 
-Измерение уровня идёт интервалами 20 мс. Детектор использует максимальный peak по каналам, индикатор также показывает RMS. Фильтр длительности требует последовательных превышений. Звук во время финализации сохраняется как отложенный запуск следующего события. Интервал остановки отсчитывается от последнего превышения по монотонному времени.
+Audio levels are measured every 20 ms. The detector uses the maximum peak across channels; the indicator also displays RMS. The duration filter requires consecutive intervals above the threshold. Sound detected during finalization is retained as a pending trigger for the next event. The stop interval is measured from the most recent threshold crossing using monotonic time.
 
-Предпросмотр выводится `d3d11videosink` в дочернее HWND. Хост располагается над соседним XAML HWND, учитывает масштаб и размер области, скрывается при сворачивании в трей и открытии ContentDialog. Скрытие не останавливает захват. Индикатор `AudioLevelMeter` — вертикальная шкала −90…0 dBFS с порогом на той же шкале; числовые поля не используют всплывающие спин-кнопки.
+`d3d11videosink` renders the preview into a child HWND. The host sits above the neighboring XAML HWND, accounts for scaling and the preview area's size, and hides when minimized to the tray or when a ContentDialog opens. Hiding does not stop capture. `AudioLevelMeter` is a vertical −90…0 dBFS meter with a threshold marker on the same scale; numeric fields do not use popup spin buttons.
 
-Файлы — обычный MP4 с индексами аудио и видео, H.264 + AAC. Части разделяются примерно раз в 60 минут по ключевым кадрам. До завершения имя заканчивается на `.partial.mp4`, затем переименовывается в `.mp4`. Для совместимости перемотки используется robust muxing вместо прежнего фрагментированного MP4. Проверка свободного места выполняется перед наблюдением и раз в секунду; резерв по умолчанию — 1 ГиБ. Старые записи не удаляются.
+Files use ordinary MP4 with audio and video indexes, H.264 + AAC. Recordings split approximately every 60 minutes at keyframes. Filenames end in `.partial.mp4` until completion, then are renamed to `.mp4`. Robust muxing replaces the previous fragmented MP4 format for seeking compatibility. Free space is checked before monitoring and every second; the default reserve is 1 GiB. Old recordings are not deleted.
 
-`mp4mux` резервирует два чередующихся заголовка `moov` и обновляет индекс раз в секунду (`reserved-moov-update-period`). Резерв рассчитывается на длительность части + 5 секунд при 1000 байтах в секунду на дорожку; для часовой части это примерно 14 МиБ на диске. `splitmuxsink use-robust-muxing=true` позволяет завершить часть раньше, если резерв индекса заканчивается. Свойства задаются и через `muxer-properties`, и первому уже созданному muxer. Описание механизма: [GStreamer mp4mux](https://gstreamer.freedesktop.org/documentation/isomp4/GstBaseQTMux.html), [splitmuxsink](https://gstreamer.freedesktop.org/documentation/multifile/splitmuxsink.html).
+`mp4mux` reserves two alternating `moov` headers and updates the index once per second (`reserved-moov-update-period`). The reservation covers the part duration plus 5 seconds at 1000 bytes per second per track; a one-hour part uses approximately 14 MiB of disk space for this. `splitmuxsink use-robust-muxing=true` allows a part to finish early if the reserved index space runs out. Properties are set both through `muxer-properties` and on the first muxer that has already been created. Mechanism documentation: [GStreamer mp4mux](https://gstreamer.freedesktop.org/documentation/isomp4/GstBaseQTMux.html), [splitmuxsink](https://gstreamer.freedesktop.org/documentation/multifile/splitmuxsink.html).
 
-Восстановление копирует файл с последним завершённым индексом в новый файл, сохраняя оригинал. `Mp4Index` проверяет таблицы размеров, распределение сэмплов по чанкам и 32/64-битные смещения; если индекс ссылается за пределы записанного `mdat`, восстановление отклоняется. Незаконченный второй заголовок остаётся внутри `free` и не используется. Индекс ограничен 32 МиБ при чтении; неиндексированный хвост после последнего обновления не воспроизводится. Для прежних fMP4 сохранено копирование полных пар `moof`/`mdat`. Сохранность при физическом сбое накопителя требует отдельной проверки.
+Recovery copies the file with its last completed index into a new file, preserving the original. `Mp4Index` validates sample sizes, sample-to-chunk mappings, and 32/64-bit offsets; recovery is rejected if the index references data beyond the recorded `mdat`. An unfinished second header remains inside `free` and is not used. Index reads are limited to 32 MiB; the unindexed tail after the last update is not played. Recovery of complete `moof`/`mdat` pairs remains supported for older fMP4 files. Durability under physical storage failures requires separate testing.
 
-## Сборка
+## Building
 
-Нужны Python 3.10+, CMake, Visual Studio 2022 C++ Build Tools (MSVC v143) и Windows SDK. .NET SDK и GStreamer извлекаются локально в `.tools`; MSI не устанавливаются в систему.
+Requirements: Python 3.10+, CMake, Visual Studio 2022 C++ Build Tools (MSVC v143), and Windows SDK. The .NET SDK and GStreamer are extracted locally into `.tools`; their MSI packages are not installed system-wide.
 
 ```powershell
 ./scripts/bootstrap.ps1
@@ -56,25 +57,25 @@ C# / .NET 10, WinUI 3, MVVM, CommunityToolkit.Mvvm, GStreamer и нативны�
 ./scripts/package.ps1 -SkipBuild
 ```
 
-Чтобы обновить только готовую папку с EXE без ZIP, используйте `./scripts/package.ps1 -NoArchive`. При публикации автоматически проверяется наличие ресурсов WinUI (`HiddenRecorder.App.pri`) и оконный тип EXE. GStreamer проверяет библиотеки внутри процесса и не запускает отдельный консольный сканер.
+To update only the published EXE folder without creating a ZIP, use `./scripts/package.ps1 -NoArchive`. Publishing automatically checks for WinUI resources (`HiddenRecorder.App.pri`) and a GUI-subsystem EXE. GStreamer scans libraries in-process rather than launching a separate console scanner.
 
-Закреплены .NET SDK 10.0.403, GStreamer 1.26.11 MSVC x64, Windows App SDK 1.8.260921001. Хеши GStreamer проверяются до распаковки; NuGet-зависимости зафиксированы lock-файлами. Результат: `artifacts/HiddenRecorder-win-x64.zip`. Лицензии: `THIRD-PARTY-NOTICES.md` и `gstreamer/share/licenses` в поставке.
+Pinned versions: .NET SDK 10.0.403, GStreamer 1.26.11 MSVC x64, Windows App SDK 1.8.260921001. GStreamer hashes are checked before extraction; NuGet dependencies are pinned in lock files. Output: `artifacts/HiddenRecorder-win-x64.zip`. Licenses: `THIRD-PARTY-NOTICES.md` and `gstreamer/share/licenses` in the package.
 
-## Архитектура
+## Architecture
 
-- **Core / Domain:** неизменяемые настройки, состояния, `SoundTriggerPolicy` без зависимости от UI или GStreamer.
-- **Core / Application:** `RecordingCoordinator` — actor с единственным читателем очереди. Внешние зависимости задаются через интерфейсы и конструктор. Таймер использует `TimeProvider.GetTimestamp()`; изменение часов не меняет длительность записи.
-- **Infrastructure:** адаптер P/Invoke с `SafeHandle`, JSON-настройки, контроль диска, power request, журнал и восстановление MP4. Настройка путей GStreamer действует только внутри процесса.
-- **App:** WinUI / CommunityToolkit.Mvvm; ViewModel отправляет команды и отображает снимки состояния. Composition root находится в `MainWindow`.
-- **Native:** `CaptureEngine`, `EncodedRing`, `Mp4Writer`, `EventQueue`. C ABI скрывает GStreamer от C#. RAII освобождает нативные ссылки и объекты.
+- **Core / Domain:** immutable settings, states, and `SoundTriggerPolicy`, with no UI or GStreamer dependencies.
+- **Core / Application:** `RecordingCoordinator` is an actor with a single queue reader. External dependencies are supplied through interfaces and the constructor. The timer uses `TimeProvider.GetTimestamp()`; wall-clock changes do not affect recording duration.
+- **Infrastructure:** P/Invoke adapter with `SafeHandle`, JSON settings, storage checks, power requests, logging, and MP4 recovery. GStreamer path configuration is process-local.
+- **App:** WinUI / CommunityToolkit.Mvvm; the ViewModel sends commands and displays state snapshots. The composition root is in `MainWindow`.
+- **Native:** `CaptureEngine`, `EncodedRing`, `Mp4Writer`, `EventQueue`. The C ABI hides GStreamer from C#. RAII releases native references and objects.
 
-Один захват видео нормализуется `videorate` до выбранной частоты кадров и разветвляется на предпросмотр и H.264; один захват микрофона проходит через `level` и AAC. Это обрабатывает повторяющиеся стартовые метки некоторых камер. Метки кодировщика переводятся из его сегмента в общую шкалу; отсутствующие метки восстанавливаются из очереди исходных кадров при отключённых B-кадрах. Сжатые пакеты хранятся по ссылкам. Начало записи атомарно соединяет снимок кольцевого буфера с последующими пакетами; единое смещение PTS/DTS сохраняет синхронизацию. `appsrc → splitmuxsink/mp4mux` работает отдельно от захвата. Из-за времени финализации кольцо хранит ещё до 12 секунд истории сверх настройки; пользователю показывается выбранная длительность. Буфер ограничен 128 МиБ, очередь писателя и `appsrc` вместе контролируются в пределах 128 МиБ; внутренние очереди GStreamer имеют дополнительные небольшие пределы.
+A single video capture is normalized to the selected frame rate by `videorate` and split into preview and H.264 branches; a single microphone capture passes through `level` and AAC. This handles duplicate startup timestamps from some cameras. Encoder timestamps are mapped from their segment to the shared timeline; missing timestamps are restored from a queue of input frames with B-frames disabled. Compressed packets are held by reference. Starting a recording atomically joins a ring-buffer snapshot with subsequent packets; a common PTS/DTS offset preserves synchronization. `appsrc → splitmuxsink/mp4mux` runs independently of capture. To accommodate finalization time, the ring retains up to 12 additional seconds of history beyond the configured duration; the UI shows the configured duration. The buffer is limited to 128 MiB, and the writer queue plus `appsrc` are jointly limited to 128 MiB; internal GStreamer queues have additional small limits.
 
-Финализация не блокирует обработку нового звука. Событие в этот момент запускает следующий файл с сохранённой предысторией. Переполнение очереди, потеря данных устройства более 10 секунд, ошибка диска или кодировщика останавливают наблюдение с уведомлением. Автоматический повторный запуск отсутствует. Во время наблюдения предотвращается автоматический сон; после принудительного сна требуется ручной запуск.
+Finalization does not block new sound processing. An event during finalization starts the next file with the retained history. Queue overflow, loss of device data for more than 10 seconds, disk errors, or encoder errors stop monitoring with a notification. There is no automatic restart. Automatic sleep is prevented during monitoring; forced sleep requires a manual restart afterward.
 
-## Проверки
+## Validation
 
-Проверка детектора и таймера с настоящим медиадвижком, синтетическими импульсами и сохранением MP4 (примерно 30 секунд):
+Test the detector and timer with the real media engine, synthetic pulses, and MP4 output (approximately 30 seconds):
 
 ```powershell
 ./.tools/dotnet/dotnet.exe run --project tools/HiddenRecorder.Diagnostics -c Release -- verify artifacts/sound-check
@@ -82,34 +83,34 @@ python scripts/verify_media.py artifacts/sound-check
 python scripts/verify_trigger_audio.py artifacts/sound-check
 ```
 
-Для каждого запуска выбирайте новую папку. Проверяются отсутствие файлов в тишине, продление таймера, непрерывный звук, фильтр длительности, раннее срабатывание, повторный запуск и завершение файлов. Последняя команда проверяет оба импульса и предзапись по декодированному звуку. Синтетический источник доступен только диагностике и не подменяет устройства в приложении.
+Choose a new folder for each run. Checks cover no files during silence, timer extension, continuous sound, the duration filter, early triggers, restart, and file finalization. The last command verifies both pulses and pre-recording in decoded audio. The synthetic source is available only to diagnostics and does not replace devices in the app.
 
-`verify-hardware OUTPUT_DIRECTORY` проверяет ту же прикладную цепочку с настоящими устройствами: отсутствие срабатываний при 0 dBFS, затем ранний запуск записи при −60 dBFS и штатную остановку. Эта проверка требует звука микрофона выше −60 dBFS; при полностью тихом/отключённом микрофоне она завершится тайм-аутом. Полученные файлы также проверяются `verify_media.py`.
+`verify-hardware OUTPUT_DIRECTORY` checks the same application flow with real devices: no triggers at 0 dBFS, followed by early recording at −60 dBFS and a normal stop. This check requires microphone sound above −60 dBFS; a completely silent or muted microphone will cause a timeout. Validate the resulting files with `verify_media.py` as well.
 
-Перед преобразованием и AAC-кодированием микрофон отделён очередью до 2 секунд / 4 МиБ: задержка инициализации кодировщика не блокирует чтение WASAPI. Сообщение WASAPI о потере аудиосэмплов останавливает наблюдение с ошибкой.
+Before conversion and AAC encoding, the microphone is isolated by a queue of up to 2 seconds / 4 MiB so encoder initialization does not block WASAPI reads. A WASAPI message about lost audio samples stops monitoring with an error.
 
 ```powershell
-./scripts/build.ps1                       # C#, C++, xUnit и тест кольца
-python -m pip install av                  # только для проверки файлов, приложению не нужен
+./scripts/build.ps1                       # C#, C++, xUnit, and ring-buffer tests
+python -m pip install av                  # File validation only; not required by the app
 python scripts/exercise_media.py --seconds 60 --output artifacts/integration
 python scripts/verify_media.py artifacts/integration
-python scripts/verify_media.py artifacts/integration --require-index # полные индексы обычного MP4
-./build/native/Release/mf-seek-check.exe PATH_TO_MP4 # перемотка декодером Windows
-python scripts/exercise_media.py --seconds 28800 --part-seconds 3600  # 8 часов
+python scripts/verify_media.py artifacts/integration --require-index # Full ordinary MP4 indexes
+./build/native/Release/mf-seek-check.exe PATH_TO_MP4 # Seeking through the Windows decoder
+python scripts/exercise_media.py --seconds 28800 --part-seconds 3600  # 8 hours
 ```
 
-Синтетические прогоны не используют камеру/микрофон. В папке результатов сохраняется `resources.jsonl`: память процесса и количество дескрипторов каждые 10 секунд. Для длительного прогона обеспечьте свободное место; тестовый runner намеренно пишет непрерывно и не применяет порог громкости.
+Synthetic runs do not use the camera or microphone. The output folder contains `resources.jsonl`, recording process memory and handle counts every 10 seconds. Ensure sufficient free space for long runs; the test runner deliberately records continuously without applying a sound threshold.
 
-`verify_media.py` проверяет все кадры, непрерывность звука и повторные переходы вперёд/назад с декодированием после целевой отметки. `mf-seek-check` делает независимую проверку H.264 через Windows Media Foundation SourceReader: переходы на 75%, 25%, 60%, 10% и начало, затем последовательность кадров после цели. Диагностика не входит в поставку и не заменяет ручную проверку конкретного проигрывателя. Для старой записи можно создать совместимую копию без перекодирования: `ffmpeg -n -i INPUT.mp4 -map 0:v:0 -map 0:a:0 -c copy -movflags +faststart OUTPUT.seekable.mp4`. FFmpeg нужен только для этой ручной операции, приложению он не требуется.
+`verify_media.py` checks all frames, audio continuity, and repeated forward/backward seeks with decoding beyond the target position. `mf-seek-check` independently tests H.264 through Windows Media Foundation SourceReader: seeks to 75%, 25%, 60%, 10%, and the beginning, followed by a sequence of frames beyond each target. Diagnostics are not included in the package and do not replace manual checks in a specific player. To create a compatible copy of an older recording without re-encoding, use `ffmpeg -n -i INPUT.mp4 -map 0:v:0 -map 0:a:0 -c copy -movflags +faststart OUTPUT.seekable.mp4`. FFmpeg is needed only for this manual operation, not by the app.
 
-Явный тест настоящих устройств через C#-адаптер:
+Explicit real-device test through the C# adapter:
 
 ```powershell
 ./.tools/dotnet/dotnet.exe run --project tools/HiddenRecorder.Diagnostics -- record artifacts/hardware 12
 ```
 
-Диагностика также поддерживает `devices` и `recover FILE`. Для аварийного теста: `python scripts/exercise_media.py --crash-after 12 --output artifacts/crash`; ожидаемый код выхода 77. Затем восстановите `.partial.mp4` через диагностику и проверьте результат `verify_media.py`.
+Diagnostics also support `devices` and `recover FILE`. For a crash test, use `python scripts/exercise_media.py --crash-after 12 --output artifacts/crash`; the expected exit code is 77. Then recover the `.partial.mp4` file through diagnostics and check the result with `verify_media.py`.
 
-### Границы проверки
+### Validation limits
 
-Короткие прогоны, unit-тесты и декодирование не заменяют восьмичасовой тест, проверку на чистых Windows 10/11 и тест физического отключения питания. Результаты текущего запуска фиксируются отдельно в `VALIDATION.md`. До этих проверок сборка считается первой проверочной версией.
+Short runs, unit tests, and decoding do not replace an eight-hour run, clean Windows 10/11 testing, or a physical power-loss test. Record actual run results separately in `VALIDATION.md`. Until those checks are complete, the build remains an initial preview release.

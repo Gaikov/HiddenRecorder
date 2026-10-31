@@ -1,82 +1,84 @@
 # HiddenRecorder
 
-HiddenRecorder записывает видео с камеры **вместе со звуком**, когда микрофон слышит звук громче заданного порога. Записи сохраняются на вашем компьютере в формате MP4.
+HiddenRecorder records camera video **with audio** when the microphone detects a sound above your chosen threshold. Recordings are saved on your computer as MP4 files.
 
-Приложение захватывает несколько секунд **до срабатывания**, чтобы в файл попало начало события. Каждый следующий громкий звук продлевает запись. После заданного времени тишины файл сохраняется, а приложение продолжает ждать новое событие.
+The app includes a few seconds **before the trigger** so that the beginning of the event is captured. Each subsequent loud sound extends the recording. After the configured period of silence, the file is saved and the app keeps waiting for another event.
 
-Например: при таймере 5 минут звук в 12:00 запускает запись до 12:05. Если следующий звук был в 12:04, запись продолжится до 12:09.
+For example, with a 5-minute timer, a sound at 12:00 starts a recording that will stop at 12:05. If another sound occurs at 12:04, recording continues until 12:09.
 
-## Что умеет приложение
+## Features
 
-- Показывать изображение камеры и текущую громкость микрофона сразу после открытия.
-- Начинать запись по громкому звуку и добавлять предысторию.
-- Продлевать запись при повторных звуках и завершать её после тишины.
-- Настраивать чувствительность, длительность записи после звука, качество видео и папку сохранения.
-- Работать со свёрнутым окном через значок в области уведомлений Windows.
-- Восстанавливать доступную часть незавершённой записи после сбоя, сохраняя исходный файл.
+- Show the camera preview and current microphone level as soon as the app opens.
+- Start recording on a loud sound and include footage from before the trigger.
+- Extend recording when more sounds occur and stop after a period of silence.
+- Adjust sensitivity, recording time after a sound, video quality, and the output folder.
+- Run with the window hidden using the Windows notification area icon.
+- Recover the available portion of an unfinished recording after a crash while preserving the original file.
 
-Текущая версия — проверочная. Поддерживается одна локальная камера и один микрофон; сетевые камеры и облачное хранение не предусмотрены.
+The current version is a preview release. It supports one local camera and one microphone; network cameras and cloud storage are not supported.
 
-## Как запустить
+## Getting started
 
-Нужны **Windows 10 22H2 или Windows 11 x64**, камера и микрофон. В Windows должен быть разрешён доступ настольных приложений к этим устройствам. Для редакций Windows N необходим Media Feature Pack.
+You need **Windows 10 22H2 or Windows 11 x64**, a camera, and a microphone. Windows must allow desktop apps to access these devices. Windows N editions also require the Media Feature Pack.
 
-Откройте папку готового приложения и запустите **`HiddenRecorder.App.exe`**. Если получили ZIP-архив, сначала распакуйте его целиком. Оставляйте EXE вместе с остальными файлами в папке.
+Open the application folder and run **`HiddenRecorder.App.exe`**. If you received a ZIP archive, extract the entire archive first. Keep the EXE together with the other files in the folder.
 
-## Первая запись
+The current application interface is in Russian; control names below are translated into English.
 
-1. Выберите камеру, микрофон и режим видео. Изображение и уровень микрофона появятся автоматически, когда устройства готовы.
-2. Укажите папку для записей, длительность предзаписи и время остановки после тишины.
-3. Настройте порог по шкале громкости: оранжевая отметка показывает уровень срабатывания. Обычный фоновый шум должен оставаться ниже этой отметки.
-4. Нажмите **«Начать наблюдение»**. Теперь превышение порога создаст запись.
-5. Для завершения текущей записи и отключения новых срабатываний нажмите **«Остановить запись»**. Изображение камеры и шкала громкости останутся включёнными.
+## Your first recording
 
-Сам по себе предпросмотр не создаёт файлов. При открытии приложения камера и микрофон включаются, но запись по звуку нужно разрешить кнопкой наблюдения.
+1. Select a camera, microphone, and video mode. The preview and microphone level appear automatically once the devices are ready.
+2. Choose an output folder, the pre-recording duration, and the silence timeout.
+3. Adjust the threshold using the level meter: the orange marker shows the trigger level. Normal background noise should stay below this marker.
+4. Click **Start monitoring**. Sounds above the threshold will now start a recording.
+5. To finish the current recording and disable new triggers, click **Stop recording**. The camera preview and level meter stay active.
 
-## Основные настройки
+The preview alone does not create files. Opening the app activates the camera and microphone, but you must enable monitoring to record on sound.
 
-Настройки меняются, когда наблюдение остановлено, и **сохраняются автоматически** примерно через полсекунды после изменения. Запускать наблюдение для сохранения не нужно. Перед выходом приложение сохраняет последние изменения.
+## Main settings
 
-Под заголовком «Настройки» отображается результат сохранения. Незавершённые или некорректные значения не заменяют последние корректные настройки; исправьте поле, если появилось сообщение об ошибке.
+Settings can be changed while monitoring is stopped. They are **saved automatically** about half a second after a change. You do not need to start monitoring to save them. The app saves the latest changes before exiting.
 
-| Настройка | Для чего нужна | По умолчанию |
+The save status appears below the Settings heading. Incomplete or invalid values do not replace the last valid settings; correct the field if an error appears.
+
+| Setting | Purpose | Default |
 |---|---|---|
-| Предзапись | Сколько секунд до громкого звука добавить в файл; доступно 1–30 секунд | 5 секунд |
-| Остановка после тишины | Сколько ждать после последнего громкого звука; доступно от 1 секунды до 24 часов | 300 секунд (5 минут) |
-| Порог громкости | Чувствительность срабатывания: ближе к −60 — чувствительнее, ближе к 0 — нужен более громкий звук | −25 dBFS |
-| Минимальный звук | Как долго звук должен превышать порог; помогает игнорировать короткие щелчки | 0 мс — фильтр выключен |
-| Режим видео | Разрешение и частота кадров из доступных для камеры | Предпочтительно 1920 × 1080, 30 FPS |
-| Звук | Запись в моно или стерео | Моно |
-| Папка записи | Куда сохранять файлы | `Видео\HiddenRecorder` в папке пользователя |
+| Pre-recording | Seconds before the loud sound to include in the file; range: 1–30 seconds | 5 seconds |
+| Silence timeout | How long to wait after the last loud sound; range: 1 second to 24 hours | 300 seconds (5 minutes) |
+| Sound threshold | Trigger sensitivity: closer to −60 is more sensitive; closer to 0 requires a louder sound | −25 dBFS |
+| Minimum sound duration | How long the sound must stay above the threshold; helps ignore short clicks | 0 ms — filter disabled |
+| Video mode | Resolution and frame rate supported by the camera | Preferably 1920 × 1080 at 30 FPS |
+| Audio | Mono or stereo recording | Mono |
+| Output folder | Where files are saved | `Videos\HiddenRecorder` in your user folder |
 
-Порог измеряется по уровню сигнала микрофона, а не по громкости комнаты в физических децибелах. Ориентируйтесь на шкалу: сделайте пробный звук и подберите порог под свои условия.
+The threshold measures the microphone signal level, not physical sound pressure in the room. Use the meter: make a test sound and adjust the threshold for your environment.
 
-Также можно менять битрейт видео и звука: более высокие значения обычно увеличивают качество и размер файлов. Формат записи — MP4.
+You can also change the video and audio bitrates. Higher values generally increase quality and file size. The recording format is MP4.
 
-## Где искать записи
+## Finding your recordings
 
-Готовые файлы находятся в выбранной папке. В имени указаны дата и время; текущий файл отображается в окне приложения. Длинная запись делится на части примерно по одному часу.
+Completed files are stored in the selected folder. Filenames include the date and time; the current file is shown in the app window. Long recordings are split into parts of approximately one hour.
 
-Предзапись может быть немного длиннее выбранной. Если звук возник сразу после включения камеры, в файл попадёт только та предыстория, которая уже успела накопиться.
+Pre-recording may be slightly longer than the selected duration. If a sound occurs immediately after the camera starts, the file includes only the footage already buffered.
 
-При остатке менее **1 ГиБ** свободного места наблюдение останавливается. Старые записи автоматически не удаляются — перенесите ненужные файлы или выберите другой диск, затем снова включите наблюдение.
+Monitoring stops when free space falls below **1 GiB**. Old recordings are not deleted automatically. Move files you no longer need or choose another drive, then enable monitoring again.
 
-## Сворачивание и выход
+## Hiding the window and exiting
 
-Крестик окна **сворачивает приложение в область уведомлений**, а не завершает его. Камера и микрофон продолжают работать; включённое наблюдение также продолжается. Через значок можно открыть окно, начать или остановить наблюдение, выйти.
+The window's close button **hides the app in the notification area** instead of exiting. The camera and microphone remain active, and monitoring continues if enabled. Use the tray icon to open the window, start or stop monitoring, or exit.
 
-Для полного завершения и освобождения устройств используйте **«Выход»**. После сна компьютера потребуется заново включить наблюдение или нажать «Обновить устройства» для предпросмотра.
+To fully close the app and release the devices, choose **Exit**. After the computer wakes from sleep, start monitoring again or click **Refresh devices** to restore the preview.
 
-## Если что-то не работает
+## Troubleshooting
 
-**Нет изображения или уровня микрофона.** Проверьте подключение устройств и разрешения Windows, нажмите «Обновить устройства», заново выберите камеру, микрофон и доступный режим видео. Сообщение об ошибке появится в окне приложения.
+**No camera preview or microphone level.** Check device connections and Windows permissions, click **Refresh devices**, and select the camera, microphone, and an available video mode again. Any error is shown in the app window.
 
-**Запись не начинается.** Убедитесь, что нажали «Начать наблюдение», а звук на шкале достигает оранжевой отметки. При необходимости уменьшите порог или длительность фильтра коротких звуков.
+**Recording does not start.** Make sure you clicked **Start monitoring** and the sound level reaches the orange marker. If necessary, lower the threshold or shorten the minimum sound duration.
 
-**Запись не останавливается.** Любой новый звук выше порога сбрасывает таймер. Если обычный фоновый шум постоянно достигает отметки, поднимите порог.
+**Recording does not stop.** Every new sound above the threshold resets the timer. If normal background noise keeps reaching the marker, raise the threshold.
 
-**После сбоя остался файл `.partial.mp4`.** Это незавершённая запись. При запуске приложение предложит восстановление; его также можно вызвать кнопкой «Восстановить незавершённые…». Восстановленный файл сохраняется отдельно, оригинал остаётся на месте. После отключения питания или повреждения диска восстановление всей записи не гарантируется.
+**A `.partial.mp4` file remains after a crash.** This is an unfinished recording. The app offers recovery on startup; you can also click **Recover unfinished recordings…**. The recovered file is saved separately, and the original stays in place. Full recovery is not guaranteed after a power failure or disk damage.
 
 ---
 
-Документация по исходному коду, сборке и проверкам: [для разработчиков и агентов](DEVELOPMENT.md).
+Source code, build, and validation documentation: [for developers and agents](DEVELOPMENT.md).

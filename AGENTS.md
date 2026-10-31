@@ -1,7 +1,8 @@
-# Документация проекта
+# Project documentation
 
-Перед изменением исходного кода прочитайте [DEVELOPMENT.md](DEVELOPMENT.md): там находятся архитектура, жизненный цикл, команды сборки и проверок, правила сопровождения для разработчиков и агентов.
+Before changing source code, read [DEVELOPMENT.md](DEVELOPMENT.md) for the architecture, lifecycle, build and validation commands, and maintenance rules for developers and agents.
 
-- [README.md](README.md) предназначен для пользователей. Не добавляйте туда детали реализации или инструкции по разработке.
-- Технические изменения документируйте в [DEVELOPMENT.md](DEVELOPMENT.md).
-- Результаты выполненных проверок и оставшиеся ограничения ведите в [VALIDATION.md](VALIDATION.md). Отличайте фактические проверки от планируемых.
+- Write and maintain all repository documentation in English, including README files and agent instructions.
+- [README.md](README.md) is for users. Do not add implementation details or development instructions there.
+- Document technical changes in [DEVELOPMENT.md](DEVELOPMENT.md).
+- Record completed checks and remaining limitations in [VALIDATION.md](VALIDATION.md). Distinguish checks actually performed from planned checks.
