@@ -18,3 +18,7 @@ target_link_libraries(ring-tests PRIVATE gstreamer-1.0 gstapp-1.0 gstvideo-1.0 g
 target_compile_options(ring-tests PRIVATE /W4 /EHsc /utf-8)
 enable_testing()
 add_test(NAME ring-tests COMMAND ring-tests)
+add_executable(mf-seek-check mf_seek_check.cpp)
+target_compile_definitions(mf-seek-check PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_compile_options(mf-seek-check PRIVATE /W4 /EHsc /utf-8)
+target_link_libraries(mf-seek-check PRIVATE mfplat mfreadwrite mfuuid ole32 propsys)

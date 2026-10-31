@@ -87,7 +87,7 @@ public sealed class PowerGuard : IPowerGuard, IDisposable
     [DllImport("kernel32")] private static extern bool CloseHandle(nint handle);
 }
 
-/// <summary>Copies only complete fMP4 fragments. The original is never modified.</summary>
+/// <summary>Copies an indexed MP4 snapshot or complete legacy fMP4 fragments. Never modifies the original.</summary>
 public sealed class FragmentRecovery
 {
     public IReadOnlyList<string> Find(string folder) => Directory.Exists(folder)
@@ -96,7 +96,9 @@ public sealed class FragmentRecovery
     {
         var target = Path.Combine(Path.GetDirectoryName(source)!, Path.GetFileNameWithoutExtension(source) + "." + Guid.NewGuid().ToString("N")[..8] + ".recovered.mp4");
         await using var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.Asynchronous);
-        var header = new byte[16]; long validEnd = 0; bool haveMoov = false, pendingMoof = false;
+        var header = new byte[16]; long validEnd = 0;
+        bool haveMoov = false, pendingMoof = false;
+        Mp4Index? index = null;
         while (input.Position + 8 <= input.Length)
         {
             var start = input.Position;
@@ -110,13 +112,31 @@ public sealed class FragmentRecovery
                 await input.ReadExactlyAsync(header.AsMemory(8, 8), cancellationToken);
                 size = BinaryPrimitives.ReadUInt64BigEndian(header.AsSpan(8)); headerLength = 16;
             }
+            // A robust recording leaves mdat open to EOF until normal finalization.
+            if (size == 0 && type == "mdat" && index is not null) size = (ulong)(input.Length - start);
             if (size < (ulong)headerLength || size > (ulong)(input.Length - start)) break;
+            if (type == "moov")
+            {
+                if (size > 32 * 1024 * 1024) throw new InvalidDataException("Индекс MP4 превышает допустимый размер.");
+                var payload = new byte[(int)size - headerLength];
+                await input.ReadExactlyAsync(payload, cancellationToken);
+                index = Mp4Index.Read(payload);
+                haveMoov = true;
+            }
             input.Position = start + (long)size;
-            if (type == "moov") haveMoov = true;
             if (type == "moof") pendingMoof = true;
-            if (type == "mdat" && pendingMoof && haveMoov) { validEnd = input.Position; pendingMoof = false; }
+            if (type == "mdat")
+            {
+                if (index is not null)
+                {
+                    if (index.FirstByte < (ulong)(start + headerLength) || index.EndByte > (ulong)input.Position)
+                        throw new InvalidDataException("Данные MP4, на которые ссылается индекс, не дописаны. Исходный файл сохранён.");
+                    validEnd = input.Position;
+                }
+                else if (pendingMoof && haveMoov) { validEnd = input.Position; pendingMoof = false; }
+            }
         }
-        if (validEnd == 0) throw new InvalidDataException("В файле нет полного MP4-фрагмента для восстановления.");
+        if (validEnd == 0) throw new InvalidDataException("В файле нет сохранённого индекса или полного MP4-фрагмента для восстановления.");
         input.Position = 0;
         await using var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, FileOptions.Asynchronous | FileOptions.WriteThrough);
         var buffer = new byte[65536];

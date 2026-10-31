@@ -226,15 +226,20 @@ public:
             char name[160]; sprintf_s(name, "HR_%04u%02u%02u_%02u%02u%02u_%03u_%lu_%u_part%%05d.partial.mp4", now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond, now.wMilliseconds, GetCurrentProcessId(), sequence++);
             const auto location_u8 = (utf8_path(directory) / name).u8string();
             std::string location(location_u8.begin(), location_u8.end());
-            auto* properties = gst_structure_new("properties", "fragment-duration", G_TYPE_UINT, 1000u, nullptr);
+            // Regular MP4 with a crash-resilient, periodically updated sample index.
+            // Reserve two alternating headers; split early if the reserved index fills.
+            const guint64 reserved_duration = (guint64(part_seconds) + 5) * GST_SECOND;
+            auto* properties = gst_structure_new("properties", "reserved-max-duration", G_TYPE_UINT64, reserved_duration,
+                "reserved-moov-update-period", G_TYPE_UINT64, guint64(GST_SECOND), "reserved-bytes-per-sec", G_TYPE_UINT, 1000u, nullptr);
             auto* sink_properties = gst_structure_new("properties", "buffer-mode", G_TYPE_INT, 4, nullptr);
-            g_object_set(mux, "location", location.c_str(), "max-size-time", guint64(part_seconds) * GST_SECOND, "max-size-bytes", guint64(0), "muxer-properties", properties, "sink-properties", sink_properties, nullptr);
+            g_object_set(mux, "location", location.c_str(), "max-size-time", guint64(part_seconds) * GST_SECOND, "max-size-bytes", guint64(0), "use-robust-muxing", TRUE, "muxer-properties", properties, "sink-properties", sink_properties, nullptr);
             // Request-pad linking in gst_parse_launch already creates the first muxer/sink.
             // Factory properties affect later parts; apply them to the initial children too.
             auto* children = gst_bin_iterate_recurse(GST_BIN(mux)); GValue child = G_VALUE_INIT;
             while (gst_iterator_next(children, &child) == GST_ITERATOR_OK) {
                 auto* object = G_OBJECT(g_value_get_object(&child));
-                if (g_object_class_find_property(G_OBJECT_GET_CLASS(object), "fragment-duration")) g_object_set(object, "fragment-duration", guint(1000), nullptr);
+                if (g_object_class_find_property(G_OBJECT_GET_CLASS(object), "reserved-max-duration"))
+                    g_object_set(object, "reserved-max-duration", reserved_duration, "reserved-moov-update-period", guint64(GST_SECOND), "reserved-bytes-per-sec", guint(1000), nullptr);
                 if (g_object_class_find_property(G_OBJECT_GET_CLASS(object), "buffer-mode")) g_object_set(object, "buffer-mode", 4, nullptr);
                 g_value_reset(&child);
             }

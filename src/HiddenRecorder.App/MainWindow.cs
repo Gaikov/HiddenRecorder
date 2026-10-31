@@ -152,7 +152,7 @@ public sealed class MainWindow : Window
         try
         {
             var dialog = new ContentDialog { XamlRoot = root.XamlRoot, RequestedTheme = ElementTheme.Dark, Title = "Незавершённые записи",
-                Content = files.Count == 0 ? "Незавершённых записей нет." : $"Найдено файлов: {files.Count}. Скопировать завершённые MP4-фрагменты в новые файлы? Оригиналы сохранятся.",
+                Content = files.Count == 0 ? "Незавершённых записей нет." : $"Найдено файлов: {files.Count}. Восстановить доступную часть записей в новые файлы? Оригиналы сохранятся.",
                 PrimaryButtonText = files.Count > 0 ? "Восстановить" : "", CloseButtonText = "Закрыть" };
             if (await dialog.ShowAsync() == ContentDialogResult.Primary)
             {
