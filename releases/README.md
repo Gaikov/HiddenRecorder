@@ -4,6 +4,7 @@ Download portable Windows builds from [GitHub Releases](https://github.com/Gaiko
 
 | Version | Status | Download |
 |---|---|---|
+| [0.1.1](0.1.1.md) | Preview | [Windows x64 ZIP](https://github.com/Gaikov/HiddenRecorder/releases/download/v0.1.1/HiddenRecorder-0.1.1-win-x64.zip) |
 | [0.1.0](0.1.0.md) | Preview | [Windows x64 ZIP](https://github.com/Gaikov/HiddenRecorder/releases/download/v0.1.0/HiddenRecorder-0.1.0-win-x64.zip) |
 
 Extract the entire ZIP and run `HiddenRecorder.App.exe`. Keep all extracted files together. No application installation is required. Windows 10 22H2 / Windows 11 x64, camera/microphone access, and device drivers are required. Windows N editions require Media Feature Pack.
