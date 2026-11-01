@@ -5,6 +5,114 @@ using Xunit;
 namespace HiddenRecorder.Tests;
 public sealed class RecorderTests
 {
+    [Fact] public async Task SleepRestartsPreviewWithEmptyBufferAndNoMonitoring()
+    {
+        await using var h = new Harness();
+        await h.Coordinator.StartPreviewAsync(h.Options); h.Media.Emit(new CaptureReady());
+        h.Media.Emit(new BufferProgress(5)); h.Level(-5); await h.Coordinator.DrainAsync();
+        await h.Coordinator.SuspendAsync();
+        Assert.Equal(RecorderState.Suspended, h.Coordinator.Snapshot.State);
+        Assert.True(h.Media.Stopped); Assert.Equal(0, h.Coordinator.Snapshot.BufferedSeconds);
+        h.Media.Emit(new MediaFailure("device disappeared during sleep")); h.Media.Emit(new CaptureReady());
+        await h.Advance(3600); Assert.Equal(RecorderState.Suspended, h.Coordinator.Snapshot.State);
+        await h.Coordinator.ResumeAsync(); await h.Coordinator.ResumeAsync();
+        await h.Advance(1); Assert.Equal(1, h.Media.Starts);
+        await h.Advance(1); Assert.Equal(2, h.Media.Starts);
+        h.Media.Emit(new CaptureReady()); h.Level(-5); await h.Coordinator.DrainAsync();
+        Assert.Equal(RecorderState.Previewing, h.Coordinator.Snapshot.State);
+        Assert.False(h.Power.Enabled); Assert.Empty(h.Media.Triggers); Assert.Empty(h.Notifications.Messages);
+        await h.Coordinator.ResumeAsync(); await h.Advance(5); Assert.Equal(2, h.Media.Starts);
+    }
+    [Fact] public async Task SleepFinalizesRecordingAndOnlyFreshSoundStartsNewEvent()
+    {
+        await using var h = new Harness(); await h.Start(); h.Level(-5); await h.Coordinator.DrainAsync();
+        await h.Coordinator.SuspendAsync(); Assert.Equal(1, h.Media.Finishes); Assert.False(h.Power.Enabled);
+        await h.Advance(3600); await h.Coordinator.ResumeAsync(); await h.Advance(2);
+        h.Level(-5); await h.Coordinator.DrainAsync(); Assert.Single(h.Media.Triggers);
+        h.Media.Emit(new CaptureReady()); await h.Coordinator.DrainAsync();
+        Assert.Equal(RecorderState.Armed, h.Coordinator.Snapshot.State); Assert.True(h.Power.Enabled);
+        h.Level(-5); await h.Coordinator.DrainAsync(); Assert.Equal(2, h.Media.Triggers.Count);
+        await h.Advance(299); Assert.Equal(RecorderState.Recording, h.Coordinator.Snapshot.State);
+        await h.Advance(1); await h.WaitFor(RecorderState.Armed);
+    }
+    [Fact] public async Task ResumeRetriesSynchronousAndAsynchronousDeviceErrors()
+    {
+        await using var h = new Harness(); await h.Start(); await h.Coordinator.SuspendAsync();
+        h.Media.FailStart = true; await h.Coordinator.ResumeAsync(); await h.Advance(2);
+        Assert.Equal(RecorderState.Reconnecting, h.Coordinator.Snapshot.State); Assert.True(h.Media.Stopped);
+        h.Media.FailStart = false; await h.Advance(2);
+        h.Media.Emit(new MediaFailure("driver not ready")); await h.Coordinator.DrainAsync();
+        Assert.Equal(RecorderState.Reconnecting, h.Coordinator.Snapshot.State);
+        await h.Advance(2); h.Media.Emit(new CaptureReady()); await h.Coordinator.DrainAsync();
+        Assert.Equal(RecorderState.Armed, h.Coordinator.Snapshot.State);
+        Assert.Equal(4, h.Media.Starts); Assert.Empty(h.Notifications.Messages); Assert.Empty(h.Coordinator.Snapshot.Error);
+    }
+    [Fact] public async Task MissingReadinessStopsAfterFiveResumeAttempts()
+    {
+        await using var h = new Harness(); await h.Start(); await h.Coordinator.SuspendAsync(); await h.Coordinator.ResumeAsync();
+        for (var i = 0; i < 5; i++) { await h.Advance(2); await h.Advance(10); }
+        Assert.Equal(RecorderState.Faulted, h.Coordinator.Snapshot.State); Assert.Equal(6, h.Media.Starts);
+        Assert.True(h.Media.Stopped); Assert.False(h.Power.Enabled); Assert.Single(h.Notifications.Messages);
+        await h.Advance(300); Assert.Equal(6, h.Media.Starts);
+    }
+    [Fact] public async Task StopCancelsResumeAndDoesNotReopenDevices()
+    {
+        await using var h = new Harness(); await h.Start(); await h.Coordinator.SuspendAsync(); await h.Coordinator.ResumeAsync();
+        await h.Coordinator.StopAsync(); await h.Advance(300); await h.Coordinator.ResumeAsync();
+        Assert.Equal(RecorderState.Idle, h.Coordinator.Snapshot.State); Assert.Equal(1, h.Media.Starts);
+    }
+    [Fact] public async Task RepeatedSleepCancelsPendingResumeUntilNextWake()
+    {
+        await using var h = new Harness(); await h.Start(); await h.Coordinator.SuspendAsync(); await h.Coordinator.ResumeAsync();
+        await h.Coordinator.SuspendAsync(); await h.Coordinator.SuspendAsync(); await h.Advance(300);
+        Assert.Equal(1, h.Media.Starts); Assert.Equal(RecorderState.Suspended, h.Coordinator.Snapshot.State);
+        await h.Coordinator.ResumeAsync(); await h.Advance(2); h.Media.Emit(new CaptureReady()); await h.Coordinator.DrainAsync();
+        Assert.Equal(RecorderState.Armed, h.Coordinator.Snapshot.State); Assert.Equal(2, h.Media.Starts);
+    }
+    [Fact] public async Task SuspendReleasesDevicesEvenWhenFileFinalizationFails()
+    {
+        await using var h = new Harness(); await h.Start(); h.Media.FailFinish = true;
+        await h.Coordinator.SuspendAsync(); Assert.True(h.Media.Stopped); Assert.False(h.Power.Enabled);
+        Assert.Equal(RecorderState.Suspended, h.Coordinator.Snapshot.State);
+        h.Media.FailFinish = false; await h.Coordinator.ResumeAsync(); await h.Advance(2);
+        h.Media.Emit(new CaptureReady()); await h.Coordinator.DrainAsync(); Assert.Equal(RecorderState.Armed, h.Coordinator.Snapshot.State);
+    }
+    [Fact] public async Task ResumeAfterDeviceFaultRecoversButAnOrdinaryFaultDoesNotRetry()
+    {
+        await using var h = new Harness(); await h.Start(); h.Media.Emit(new MediaFailure("camera lost power"));
+        await h.Coordinator.DrainAsync(); await h.Advance(300); Assert.Equal(1, h.Media.Starts);
+        await h.Coordinator.ResumeAsync(); await h.Advance(2); h.Media.Emit(new CaptureReady()); await h.Coordinator.DrainAsync();
+        Assert.Equal(RecorderState.Armed, h.Coordinator.Snapshot.State); Assert.Empty(h.Coordinator.Snapshot.Error);
+    }
+    [Fact] public async Task ResumeRechecksStorageBeforeReenablingMonitoring()
+    {
+        await using var h = new Harness(); await h.Start(); await h.Coordinator.SuspendAsync(); h.Disk.Fail = true;
+        await h.Coordinator.ResumeAsync(); await h.Advance(2); h.Media.Emit(new CaptureReady()); await h.Coordinator.DrainAsync();
+        Assert.Equal(RecorderState.Faulted, h.Coordinator.Snapshot.State); Assert.True(h.Media.Stopped); Assert.False(h.Power.Enabled);
+        await h.Advance(300); Assert.Equal(2, h.Media.Starts);
+    }
+    [Fact] public async Task IdleSleepDoesNotAcquireDevicesOnWake()
+    {
+        await using var h = new Harness(); await h.Coordinator.SuspendAsync(); await h.Coordinator.ResumeAsync(); await h.Advance(300);
+        Assert.Equal(RecorderState.Idle, h.Coordinator.Snapshot.State); Assert.Equal(0, h.Media.Starts);
+    }
+    [Fact] public async Task DisarmingWhileSuspendedRestoresOnlyPreview()
+    {
+        await using var h = new Harness(); await h.Start(); await h.Coordinator.SuspendAsync(); await h.Coordinator.DisarmAsync();
+        Assert.Equal(RecorderState.Suspended, h.Coordinator.Snapshot.State);
+        await h.Coordinator.ResumeAsync(); await h.Advance(2); h.Media.Emit(new CaptureReady()); await h.Coordinator.DrainAsync();
+        Assert.Equal(RecorderState.Previewing, h.Coordinator.Snapshot.State); Assert.False(h.Power.Enabled);
+    }
+    [Fact] public async Task ResumeWaitsForSuspendingFileFinalization()
+    {
+        await using var h = new Harness(); await h.Start(); h.Level(-5); await h.Coordinator.DrainAsync();
+        h.Media.BlockFinish = true;
+        var suspend = h.Coordinator.SuspendAsync(); var resume = h.Coordinator.ResumeAsync();
+        Assert.False(resume.IsCompleted); Assert.Equal(1, h.Media.Starts);
+        h.Media.ReleaseFinish(); await suspend; await resume; await h.Advance(2);
+        h.Media.Emit(new CaptureReady()); await h.Coordinator.DrainAsync();
+        Assert.Equal(RecorderState.Armed, h.Coordinator.Snapshot.State); Assert.Equal(2, h.Media.Starts); Assert.Single(h.Media.Triggers);
+    }
     [Fact] public async Task PreviewUpdatesLevelsButNeverRecordsOrRequiresDiskSpace()
     {
         await using var h = new Harness(); h.Disk.Fail = true;
@@ -153,13 +261,13 @@ public sealed class RecorderTests
     {
         public event Action<MediaEvent>? Event;
         public List<TimeSpan> Triggers { get; } = [];
-        public bool Stopped, BlockFinish; public int Starts, Finishes;
+        public bool Stopped, BlockFinish, FailStart, FailFinish; public int Starts, Finishes;
         private readonly TaskCompletionSource completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public void Emit(MediaEvent value) => Event?.Invoke(value);
-        public Task StartAsync(RecorderSettings settings, CancellationToken cancellationToken = default) { Starts++; Stopped = false; return Task.CompletedTask; }
+        public Task StartAsync(RecorderSettings settings, CancellationToken cancellationToken = default) { Starts++; Stopped = false; if (FailStart) throw new IOException("Device not available"); return Task.CompletedTask; }
         public Task StopAsync(CancellationToken cancellationToken = default) { Stopped = true; return Task.CompletedTask; }
         public Task BeginAsync(TimeSpan time, CancellationToken cancellationToken = default) { Triggers.Add(time); return Task.CompletedTask; }
-        public Task FinishAsync(CancellationToken cancellationToken = default) { Finishes++; return BlockFinish ? completion.Task : Task.CompletedTask; }
+        public Task FinishAsync(CancellationToken cancellationToken = default) { Finishes++; if (FailFinish) throw new IOException("Cannot finalize"); return BlockFinish ? completion.Task : Task.CompletedTask; }
         public void ReleaseFinish() { BlockFinish = false; completion.TrySetResult(); }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

@@ -77,7 +77,7 @@ The window's close button **hides the app in the notification area** instead of 
 
 If you cannot find the tray icon, **run `HiddenRecorder.App.exe` again** to reopen the existing window. This does not start another recorder. Windows may place the icon in its hidden-icons menu. The app attempts to restore a missing icon; if registration fails, closing the window minimizes it to the taskbar instead of hiding it.
 
-To fully close the app and release the devices, choose **Exit**. After the computer wakes from sleep, start monitoring again or click **Refresh devices** to restore the preview.
+To fully close the app and release the devices, choose **Exit**. When the computer sleeps, the app attempts to finish the current recording and releases the camera and microphone. After waking, it reconnects the same devices automatically: preview returns, and monitoring resumes if it was enabled before sleep. A new sound starts a new file; the time spent asleep is not recorded. Reconnection can take several seconds. If devices remain unavailable after repeated attempts, check their connections and click **Refresh devices** or **Start monitoring**.
 
 ## Troubleshooting
 

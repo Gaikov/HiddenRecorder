@@ -1,6 +1,6 @@
 namespace HiddenRecorder.Core;
 
-public enum RecorderState { Idle, Starting, Armed, Recording, Finalizing, Stopping, Faulted, PreviewStarting, Previewing }
+public enum RecorderState { Idle, Starting, Armed, Recording, Finalizing, Stopping, Faulted, PreviewStarting, Previewing, Suspended, Reconnecting }
 public sealed record VideoMode(int Width, int Height, int FpsNumerator, int FpsDenominator, string Caps)
 {
     public override string ToString() => $"{Width} × {Height} · {(double)FpsNumerator / FpsDenominator:0.##} FPS";

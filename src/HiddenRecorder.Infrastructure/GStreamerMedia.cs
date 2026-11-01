@@ -77,6 +77,8 @@ public sealed class GStreamerMedia : ICaptureSession, IEventRecorder, IDeviceCat
     private readonly SemaphoreSlim operations = new(1);
     private readonly CancellationTokenSource lifetime = new();
     private readonly Task poller;
+    private readonly object eventGate = new();
+    private bool eventsEnabled;
     private nint window;
     private int width = 640, height = 360;
     private bool disposed;
@@ -101,12 +103,25 @@ public sealed class GStreamerMedia : ICaptureSession, IEventRecorder, IDeviceCat
     }
     public Task StartAsync(RecorderSettings settings, CancellationToken cancellationToken = default) => RunAsync(() =>
     {
+        lock (eventGate) eventsEnabled = false;
         var config = new Native.Config { Camera = settings.CameraId, Microphone = settings.MicrophoneId, Caps = settings.VideoMode!.Caps,
             Output = settings.OutputDirectory, PreSeconds = settings.PreRollSeconds, VideoKbps = settings.VideoBitrateKbps,
             AudioKbps = settings.AudioBitrateKbps, Channels = settings.AudioChannels, PartSeconds = settings.PartSeconds, TestSource = testSource ? 2 : 0 };
         Native.hr_preview(handle, (nuint)window, width, height); Native.Check(Native.hr_start(handle, ref config));
+        lock (eventGate) eventsEnabled = true;
     }, cancellationToken);
-    public Task StopAsync(CancellationToken cancellationToken = default) => RunAsync(() => Native.Check(Native.hr_stop(handle)), cancellationToken);
+    public Task StopAsync(CancellationToken cancellationToken = default) => RunAsync(() =>
+    {
+        lock (eventGate) eventsEnabled = false;
+        try { Native.Check(Native.hr_stop(handle)); }
+        finally
+        {
+            // Keep file-completion notifications while discarding stale capture events.
+            lock (eventGate)
+                while (Native.hr_poll(handle, out var value) != 0)
+                    if (value.Type == 5) Event?.Invoke(new FileClosed(value.Message));
+        }
+    }, cancellationToken);
     public Task BeginAsync(TimeSpan triggerTime, CancellationToken cancellationToken = default) => RunAsync(() => Native.Check(Native.hr_begin(handle, triggerTime.Ticks * 100)), cancellationToken);
     public Task FinishAsync(CancellationToken cancellationToken = default) => RunAsync(() => Native.Check(Native.hr_finish(handle)), cancellationToken);
     internal Task SetTestVolumeAsync(double volume) => RunAsync(() => Native.Check(Native.hr_test_volume(handle, volume)), default);
@@ -129,7 +144,10 @@ public sealed class GStreamerMedia : ICaptureSession, IEventRecorder, IDeviceCat
         {
             while (!lifetime.IsCancellationRequested)
             {
-                while (Native.hr_poll(handle, out var value) != 0)
+                // Serialize event delivery with the capture boundary, not with file finalization.
+                // Native start clears the old queue before events from the new pipeline are enabled.
+                lock (eventGate)
+                while (eventsEnabled && Native.hr_poll(handle, out var value) != 0)
                 {
                     MediaEvent? item = value.Type switch
                     {

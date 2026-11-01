@@ -24,6 +24,9 @@ public sealed class RecordingCoordinator : IAsyncDisposable
     private long generation;
     private int tickQueued;
     private bool disposed;
+    private bool captureRequested, monitoringRequested, recovering, recoveryStarting;
+    private int recoveryAttempts;
+    private long recoveryStamp;
     public RecorderSnapshot Snapshot => snapshot;
     public event Action<RecorderSnapshot>? Changed;
 
@@ -59,6 +62,7 @@ public sealed class RecordingCoordinator : IAsyncDisposable
     {
         if (snapshot.State is not (RecorderState.Idle or RecorderState.Faulted or RecorderState.Previewing or RecorderState.PreviewStarting)) return;
         options.Validate(); storage.Check(options, true);
+        captureRequested = monitoringRequested = true;
         var reuse = snapshot.State == RecorderState.Previewing && SameCaptureSettings(settings, options);
         if (!reuse && snapshot.State is RecorderState.Previewing or RecorderState.PreviewStarting) await StopInternalAsync();
         settings = options; policy = new(options.ThresholdDb, TimeSpan.FromMilliseconds(options.MinimumSoundMs));
@@ -71,6 +75,7 @@ public sealed class RecordingCoordinator : IAsyncDisposable
     {
         if (snapshot.State is not (RecorderState.Idle or RecorderState.Faulted or RecorderState.Previewing or RecorderState.PreviewStarting)) return;
         options.Validate();
+        captureRequested = true; monitoringRequested = false;
         if (snapshot.State is RecorderState.Previewing or RecorderState.PreviewStarting && SameCaptureSettings(settings, options)) return;
         if (snapshot.State != RecorderState.Idle) await StopInternalAsync();
         settings = options; generation++; pendingTrigger = null; finalization = null;
@@ -80,6 +85,9 @@ public sealed class RecordingCoordinator : IAsyncDisposable
     // Stop event recording while retaining the live camera/microphone for settings and meters.
     public Task DisarmAsync() => Command(async () =>
     {
+        monitoringRequested = false;
+        if (snapshot.State == RecorderState.Suspended) return;
+        if (snapshot.State == RecorderState.Reconnecting) { recovering = false; captureRequested = false; await StopInternalAsync(); return; }
         if (snapshot.State is RecorderState.Idle or RecorderState.Faulted or RecorderState.PreviewStarting or RecorderState.Previewing) return;
         if (snapshot.State == RecorderState.Starting)
         {
@@ -97,15 +105,82 @@ public sealed class RecordingCoordinator : IAsyncDisposable
         a.PreRollSeconds == b.PreRollSeconds && a.VideoBitrateKbps == b.VideoBitrateKbps &&
         a.AudioBitrateKbps == b.AudioBitrateKbps && a.AudioChannels == b.AudioChannels &&
         a.OutputDirectory == b.OutputDirectory && a.PartSeconds == b.PartSeconds;
-    public Task StopAsync() => Command(StopInternalAsync);
+    public Task StopAsync() => Command(async () =>
+    {
+        captureRequested = monitoringRequested = recovering = false;
+        await StopInternalAsync();
+    });
+    public Task SuspendAsync() => Command(async () =>
+    {
+        if (snapshot.State == RecorderState.Suspended) return;
+        recovering = false;
+        log.Write("System suspend: releasing camera and microphone");
+        try { await StopInternalAsync(); }
+        catch (Exception ex) { log.Write("Could not fully finalize before suspend", ex); }
+        snapshot = new(RecorderState.Suspended); Publish();
+    });
+    public Task ResumeAsync() => Command(() =>
+    {
+        if (!captureRequested && snapshot.State == RecorderState.Suspended)
+        {
+            snapshot = new(RecorderState.Idle); Publish(); return Task.CompletedTask;
+        }
+        // Faulted also covers a device failure delivered before the suspend notification.
+        if (!captureRequested || snapshot.State is not (RecorderState.Suspended or RecorderState.Faulted)) return Task.CompletedTask;
+        recovering = true; recoveryStarting = false; recoveryAttempts = 0;
+        recoveryStamp = time.GetTimestamp();
+        log.Write("System resume: scheduling device reconnection");
+        snapshot = new(RecorderState.Reconnecting); Publish();
+        return Task.CompletedTask;
+    });
+    private async Task RetryRecoveryAsync(Exception error)
+    {
+        log.Write($"Resume attempt {recoveryAttempts} failed", error);
+        try { await StopInternalAsync(); } catch (Exception ex) { log.Write("Cleanup during resume", ex); }
+        if (recoveryAttempts >= 5)
+        {
+            recovering = false;
+            await FaultAsync(new IOException("Could not reconnect camera and microphone after sleep. Check the devices, then click Refresh devices or Start monitoring. " + error.Message));
+            return;
+        }
+        recoveryStarting = false; recoveryStamp = time.GetTimestamp();
+        snapshot = new(RecorderState.Reconnecting); Publish();
+    }
+    private async Task RecoverTickAsync()
+    {
+        var elapsed = time.GetElapsedTime(recoveryStamp);
+        if (recoveryStarting)
+        {
+            if (elapsed >= TimeSpan.FromSeconds(10)) await RetryRecoveryAsync(new TimeoutException("Devices did not become ready within 10 seconds."));
+            return;
+        }
+        if (elapsed < TimeSpan.FromSeconds(2)) return;
+        recoveryAttempts++; recoveryStarting = true; recoveryStamp = time.GetTimestamp();
+        generation++; pendingTrigger = null; finalization = null;
+        try
+        {
+            // Always discard the old pipeline and pre-recording timestamps across sleep.
+            await capture.StopAsync();
+            await capture.StartAsync(settings);
+        }
+        catch (Exception ex) { await RetryRecoveryAsync(ex); }
+    }
     public Task DrainAsync() => Command(() => Task.CompletedTask);
     private async Task StopInternalAsync()
     {
         if (snapshot.State == RecorderState.Idle) return;
         generation++; SetState(RecorderState.Stopping); pendingTrigger = null;
-        if (finalization is not null) await finalization;
-        else await recorder.FinishAsync();
-        await capture.StopAsync(); power.SetMonitoring(false);
+        try
+        {
+            if (finalization is not null) await finalization;
+            else await recorder.FinishAsync();
+        }
+        finally
+        {
+            finalization = null;
+            try { await capture.StopAsync(); }
+            finally { power.SetMonitoring(false); }
+        }
         snapshot = new(RecorderState.Idle); Publish();
     }
     private void OnMedia(MediaEvent value)
@@ -116,9 +191,17 @@ public sealed class RecordingCoordinator : IAsyncDisposable
     }
     private async Task HandleAsync(MediaEvent value, long received)
     {
-        if (snapshot.State is RecorderState.Idle or RecorderState.Stopping or RecorderState.Faulted) return;
+        if (snapshot.State is RecorderState.Idle or RecorderState.Stopping or RecorderState.Faulted or RecorderState.Suspended) return;
+        if (recovering && !recoveryStarting) return;
         switch (value)
         {
+            case CaptureReady when recovering:
+                if (monitoringRequested) { storage.Check(settings, true); power.SetMonitoring(true); lastDiskCheck = time.GetTimestamp(); }
+                policy = new(settings.ThresholdDb, TimeSpan.FromMilliseconds(settings.MinimumSoundMs));
+                recovering = false;
+                snapshot = snapshot with { Error = "" };
+                SetState(monitoringRequested ? RecorderState.Armed : RecorderState.Previewing);
+                break;
             case CaptureReady when snapshot.State == RecorderState.Starting: SetState(RecorderState.Armed); break;
             case CaptureReady when snapshot.State == RecorderState.PreviewStarting: SetState(RecorderState.Previewing); break;
             case AudioLevel level:
@@ -133,6 +216,7 @@ public sealed class RecordingCoordinator : IAsyncDisposable
             case BufferProgress progress: snapshot = snapshot with { BufferedSeconds = progress.Seconds }; break;
             case FileOpened file when snapshot.State is RecorderState.Recording or RecorderState.Finalizing: snapshot = snapshot with { CurrentFile = file.Path }; log.Write($"File opened: {file.Path}"); break;
             case FileClosed file: log.Write($"File closed: {file.Path}"); break;
+            case MediaFailure error when recovering: await RetryRecoveryAsync(new IOException(error.Message)); break;
             case MediaFailure error: throw new IOException(error.Message);
         }
     }
@@ -143,7 +227,8 @@ public sealed class RecordingCoordinator : IAsyncDisposable
     }
     private async Task TickAsync()
     {
-        if (snapshot.State is RecorderState.Idle or RecorderState.Faulted) return;
+        if (snapshot.State is RecorderState.Idle or RecorderState.Faulted or RecorderState.Suspended) return;
+        if (recovering) { await RecoverTickAsync(); return; }
         var now = time.GetTimestamp();
         if (snapshot.State is not (RecorderState.Previewing or RecorderState.PreviewStarting) && time.GetElapsedTime(lastDiskCheck, now) >= TimeSpan.FromSeconds(1))
         { storage.Check(settings, false); lastDiskCheck = now; }
@@ -177,6 +262,7 @@ public sealed class RecordingCoordinator : IAsyncDisposable
     }
     private async Task FaultAsync(Exception error)
     {
+        recovering = false;
         generation++; log.Write("Recorder failure", error);
         snapshot = snapshot with { State = RecorderState.Faulted, Error = error.Message }; Publish();
         try { if (finalization is not null) await finalization; else await recorder.FinishAsync(); } catch (Exception ex) { log.Write("Finalize after failure", ex); }

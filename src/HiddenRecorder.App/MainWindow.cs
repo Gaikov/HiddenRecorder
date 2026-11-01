@@ -44,7 +44,8 @@ public sealed class MainWindow : Window
             desktop.StartRequested += async () => await viewModel.StartAsync();
             desktop.StopRequested += async () => await viewModel.StopAsync();
             desktop.ExitRequested += async () => await ExitAsync();
-            desktop.SuspendRequested += async () => await viewModel.SuspendAsync();
+            desktop.SuspendRequested += async () => { if (!exiting) await viewModel.SuspendAsync(); };
+            desktop.ResumeRequested += async () => { if (!exiting) await viewModel.ResumeAsync(); };
             AppWindow.Closing += (_, args) =>
             {
                 if (exiting) return;

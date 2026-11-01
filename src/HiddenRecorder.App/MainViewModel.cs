@@ -185,19 +185,27 @@ public partial class MainViewModel : ObservableObject
     }
     public async Task SuspendAsync()
     {
-        PrepareForExit();
+        previewSuspended = true; previewRefresh.Stop();
+        // Enqueue the stop before awaiting settings IO, so a rapid resume cannot overtake it.
+        try { await coordinator.SuspendAsync(); } catch (Exception ex) { Error = ex.Message; }
         try { await settingsSaver.FlushAsync(); } catch (Exception ex) { SettingsMessage = "Settings not saved: " + ex.Message; }
-        try { await coordinator.StopAsync(); } catch (Exception ex) { Error = ex.Message; }
+    }
+    public async Task ResumeAsync()
+    {
+        if (closing) return;
+        previewSuspended = false;
+        try { await coordinator.ResumeAsync(); } catch (Exception ex) { Error = ex.Message; }
     }
     public void PrepareForExit() { previewSuspended = true; previewRefresh.Stop(); }
     private void Apply(RecorderSnapshot value)
     {
         CanConfigure = value.State is RecorderState.Idle or RecorderState.Faulted or RecorderState.Previewing or RecorderState.PreviewStarting;
-        Status = value.State switch { RecorderState.Idle => "Camera and microphone off", RecorderState.PreviewStarting => "Connecting camera and microphone…", RecorderState.Previewing => "Preview · sound-triggered recording off", RecorderState.Starting => "Starting monitoring…", RecorderState.Armed => "Monitoring · waiting for sound", RecorderState.Recording => "● Recording", RecorderState.Finalizing => "Saving file…", RecorderState.Stopping => "Stopping…", _ => "Error · devices stopped" };
+        Status = value.State switch { RecorderState.Idle => "Camera and microphone off", RecorderState.Suspended => "Sleeping · camera and microphone off", RecorderState.Reconnecting => "Reconnecting camera and microphone after sleep…", RecorderState.PreviewStarting => "Connecting camera and microphone…", RecorderState.Previewing => "Preview · sound-triggered recording off", RecorderState.Starting => "Starting monitoring…", RecorderState.Armed => "Monitoring · waiting for sound", RecorderState.Recording => "● Recording", RecorderState.Finalizing => "Saving file…", RecorderState.Stopping => "Stopping…", _ => "Error · devices stopped" };
         PeakDb = value.PeakDb; RmsDb = value.RmsDb; BufferPercent = Math.Clamp(value.BufferedSeconds / Math.Max(1, PreRollSeconds) * 100, 0, 100);
         OnPropertyChanged(nameof(Levels));
         Timers = $"Pre-recording: {value.BufferedSeconds:0.0} s  ·  Recorded: {TimeSpan.FromSeconds(value.RecordedSeconds):hh\\:mm\\:ss}  ·  Time remaining: {value.RemainingSeconds:0} s";
-        CurrentFile = value.CurrentFile; if (!string.IsNullOrEmpty(value.Error)) Error = value.Error;
+        CurrentFile = value.CurrentFile;
+        if (!string.IsNullOrEmpty(value.Error) || value.State is RecorderState.Suspended or RecorderState.Reconnecting or RecorderState.Previewing or RecorderState.Armed) Error = value.Error;
         StateChanged?.Invoke(value.State);
     }
 }

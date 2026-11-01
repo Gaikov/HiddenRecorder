@@ -12,13 +12,15 @@ public sealed class DesktopIntegration : IUserNotifier, IDisposable
     private readonly uint taskbarCreated;
     private readonly DispatcherQueueTimer trayTimer;
     private readonly ApplicationIcon trayIcon;
+    private readonly nint powerNotifications;
+    private bool powerSuspended;
     private bool disposed;
     private bool? trayAvailable;
     private NotifyData data;
     private RecorderState? lastState;
     private bool previewVisible;
     private (int X, int Y, int Width, int Height)? previewBounds;
-    public event Action? ShowRequested, StartRequested, StopRequested, ExitRequested, SuspendRequested;
+    public event Action? ShowRequested, StartRequested, StopRequested, ExitRequested, SuspendRequested, ResumeRequested;
     public nint PreviewWindow { get; }
     public DesktopIntegration(nint window, DispatcherQueue dispatcher, IAppLog log)
     {
@@ -27,6 +29,8 @@ public sealed class DesktopIntegration : IUserNotifier, IDisposable
         procedure = WndProc;
         taskbarCreated = RegisterWindowMessageW("TaskbarCreated");
         if (!SetWindowSubclass(window, procedure, 1, 0)) { trayIcon.Dispose(); throw new InvalidOperationException("Could not attach desktop window events."); }
+        powerNotifications = RegisterSuspendResumeNotification(window, 0);
+        if (powerNotifications == 0) log.Write($"Suspend/resume notification registration failed: {Marshal.GetLastWin32Error()}");
         PreviewWindow = CreateWindowExW(0, "STATIC", "", 0x50000000 | 0x04000000, 0, 0, 1, 1, window, 0, 0, 0);
         data = new NotifyData { Size = (uint)Marshal.SizeOf<NotifyData>(), Window = window, Id = 1, Flags = 1 | 2 | 4 | 32, Callback = 0x8001,
             Guid = new Guid("29ed74e4-71f1-4ce8-af93-f424e5a58ee7"),
@@ -92,7 +96,19 @@ public sealed class DesktopIntegration : IUserNotifier, IDisposable
             }
             return 0;
         }
-        if (message == 0x218 && wParam == 4 || message == 0x11) SuspendRequested?.Invoke();
+        if (message == 0x218)
+        {
+            if (wParam == 4)
+            {
+                powerSuspended = true; log.Write("Windows power event: suspend"); SuspendRequested?.Invoke(); return 1;
+            }
+            // Automatic resume is normally followed by a user-presence resume: do not restart twice.
+            if (wParam is 18 or 6 || wParam == 7 && powerSuspended)
+            {
+                powerSuspended = false; log.Write("Windows power event: resume"); ResumeRequested?.Invoke(); return 1;
+            }
+        }
+        if (message == 0x11) SuspendRequested?.Invoke();
         if (message == 0x82) RemoveWindowSubclass(hwnd, procedure, 1);
         return DefSubclassProc(hwnd, message, wParam, lParam);
     }
@@ -114,6 +130,7 @@ public sealed class DesktopIntegration : IUserNotifier, IDisposable
     {
         if (disposed) return; disposed = true;
         trayTimer.Stop(); Shell_NotifyIconW(2, ref data); trayIcon.Dispose();
+        if (powerNotifications != 0) UnregisterSuspendResumeNotification(powerNotifications);
         RemoveWindowSubclass(window, procedure, 1); DestroyWindow(PreviewWindow);
     }
     [UnmanagedFunctionPointer(CallingConvention.Winapi)] private delegate nint WindowProc(nint hwnd, uint message, nuint wParam, nint lParam, nuint subclassId, nuint referenceData);
@@ -143,4 +160,6 @@ public sealed class DesktopIntegration : IUserNotifier, IDisposable
     [DllImport("user32")] private static extern bool DestroyMenu(nint menu);
     [DllImport("user32")] private static extern bool GetCursorPos(out Point point);
     [DllImport("user32")] private static extern bool SetForegroundWindow(nint hwnd);
+    [DllImport("user32", SetLastError = true)] private static extern nint RegisterSuspendResumeNotification(nint recipient, uint flags);
+    [DllImport("user32")] private static extern bool UnregisterSuspendResumeNotification(nint registration);
 }

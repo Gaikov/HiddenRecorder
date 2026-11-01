@@ -1,4 +1,14 @@
-# Build validation — October 31, 2026
+# Build validation
+
+## Sleep/resume recovery — November 1, 2026 (0.1.1)
+
+- Found no resume handler in the previous version: suspend stopped capture and permanently set the ViewModel's preview-suspended flag until a manual action. Added registered Windows power notifications, automatic device reconnection, bounded retries, restoration of the prior preview/monitoring mode, and cleanup of stale capture events and buffered history.
+- C++/WinUI Release builds and portable package checks passed. All 47 xUnit tests passed, including 12 new power-lifecycle cases: preview-only restoration, active-recording finalization, fresh trigger timing, synchronous/asynchronous failures, readiness timeout and retry exhaustion, stop cancellation, repeated suspend, failed file finalization, a device fault preceding power notification, storage recheck, idle wake, disarming while asleep, and resume queued behind finalization. Native ring-buffer checks passed; the full SDK still warns about its unused Python plugin, which is not shipped.
+- `verify-resume artifacts/resume-synthetic` passed three preview suspend/resume cycles, returning audio levels and buffer filling, quiet monitoring restoration, and two finalized recordings on either side of suspend. Both MP4 files fully decode, have ordinary indexes, and pass seeking checks (113 video frames total; maximum initial track PTS difference 0.67 ms).
+- `verify-resume-hardware artifacts/resume-hardware` passed the same scenario with the real USB camera at 1080p/30 and the default microphone, using the reduced portable GStreamer runtime. Each cycle produced one fresh pipeline readiness event; audio level events stopped while suspended and returned after resume. Two recordings finalized, with 154 decoded frames, continuous audio, valid indexes and seeking, and 0 ms initial PTS difference. User settings and recordings were not changed.
+- The existing sound-trigger integration scenario passed in `artifacts/resume-sound-regression`, including silence, repeated sounds, continuous sound, duration filtering, early trigger, and manual stop. All three files decode and seek; decoded audio contains both trigger pulses and 5.849 seconds of pre-recording. This checks that event gating does not block audio during file finalization or discard file-completion notifications.
+- Packaged the 0.1.1 candidate in `artifacts/HiddenRecorder-resume-candidate`; GUI EXE, PRI, local runtime, and dependency checks passed. No dependency selection or native media format changed in this fix.
+- These tests call the application suspend/resume operations directly; Windows was not put to sleep. Actual lid-close, hibernation, Modern Standby, power-notification delivery, post-sleep D3D preview rendering, and driver recovery on the user's laptop remain manual acceptance checks. Native driver calls are not forcibly terminated if a driver hangs. No new claim of clean-machine or long-duration validation is made.
 
 ## Versioned 0.1.0 preview candidate
 
